@@ -76,6 +76,13 @@ class PriceProvider:
         self._fx_cache: tuple[float, float] | None = None
         self._finnhub = finnhub.Client(api_key=FINNHUB_API_KEY) if FINNHUB_API_KEY else None
         self._rate_limiter = _RateLimiter(QUOTE_RATE_LIMIT_PER_MINUTE)
+        self._cache_ttl_seconds = PRICE_CACHE_SECONDS
+
+    def set_quote_cache_ttl(self, seconds: int) -> None:
+        self._cache_ttl_seconds = max(60, seconds)
+
+    def quote_cache_ttl_seconds(self) -> int:
+        return self._cache_ttl_seconds
 
     def _cache_key(self, symbol: str, market: str) -> str:
         return f"{market}:{symbol.upper()}"
@@ -84,7 +91,7 @@ class PriceProvider:
         if key not in self._cache:
             return False
         ts, _ = self._cache[key]
-        return (time.time() - ts) < PRICE_CACHE_SECONDS
+        return (time.time() - ts) < self._cache_ttl_seconds
 
     def yahoo_symbol(self, symbol: str, market: str) -> str:
         symbol = symbol.upper()
@@ -93,7 +100,7 @@ class PriceProvider:
         return symbol
 
     async def get_usd_ils(self) -> float:
-        if self._fx_cache and (time.time() - self._fx_cache[0]) < PRICE_CACHE_SECONDS:
+        if self._fx_cache and (time.time() - self._fx_cache[0]) < self._cache_ttl_seconds:
             return self._fx_cache[1]
         ticker = yf.Ticker("USDILS=X")
         hist = ticker.history(period="1d")

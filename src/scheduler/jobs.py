@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 
 import pytz
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bot.i18n import I18n
-from src.config import ALERT_CHECK_MINUTES, TIMEZONE
+from src.config import MIN_ALERT_CHECK_MINUTES, QUOTE_RATE_LIMIT_PER_MINUTE, TIMEZONE
 from src.db.repository import Repository
 from src.market.calendar import is_trading_day
 from src.market.prices import PriceProvider
@@ -35,12 +37,48 @@ class BotScheduler:
         self.calculator = calculator
         self.i18n = i18n
         self.scheduler = AsyncIOScheduler(timezone=pytz.timezone(TIMEZONE))
+        self._alert_interval_minutes = MIN_ALERT_CHECK_MINUTES
 
     def start(self) -> None:
         self.scheduler.add_job(self._check_report_schedule, "cron", minute="*")
-        self.scheduler.add_job(self._check_alerts, "interval", minutes=ALERT_CHECK_MINUTES)
+        self.scheduler.add_job(
+            self._check_alerts,
+            "interval",
+            minutes=MIN_ALERT_CHECK_MINUTES,
+            id="alert_check",
+            replace_existing=True,
+        )
         self.scheduler.start()
         logger.info("Scheduler started")
+
+    @staticmethod
+    def _interval_for_symbols(symbol_count: int) -> int:
+        if symbol_count <= 0:
+            return MIN_ALERT_CHECK_MINUTES
+        return max(
+            MIN_ALERT_CHECK_MINUTES,
+            math.ceil(symbol_count / QUOTE_RATE_LIMIT_PER_MINUTE),
+        )
+
+    def _sync_alert_schedule(self, symbol_count: int) -> None:
+        interval = self._interval_for_symbols(symbol_count)
+        self.prices.set_quote_cache_ttl(interval * 60)
+
+        job = self.scheduler.get_job("alert_check")
+        if job is None:
+            return
+
+        current = int(job.trigger.interval.total_seconds() // 60)
+        if current != interval:
+            job.reschedule(trigger=IntervalTrigger(minutes=interval))
+            logger.info(
+                "Alert interval %d → %d min (%d symbols, cache TTL %ds)",
+                current,
+                interval,
+                symbol_count,
+                interval * 60,
+            )
+        self._alert_interval_minutes = interval
 
     async def _collect_symbols(self, users) -> set[tuple[str, str]]:
         symbols: set[tuple[str, str]] = set()
@@ -174,7 +212,9 @@ class BotScheduler:
         if not is_trading_day(now):
             return
         users = await self.repo.get_all_users()
-        await self.prices.warm_cache(list(await self._collect_symbols(users)))
+        symbols = await self._collect_symbols(users)
+        self._sync_alert_schedule(len(symbols))
+        await self.prices.warm_cache(list(symbols))
         today = now.date().isoformat()
         for user in users:
             if not user.onboarding_completed:
