@@ -1,0 +1,15 @@
+[Unit]
+Description=Stockbot Telegram Portfolio Bot
+After=network.target
+
+[Service]
+Type=simple
+User=stockbot
+WorkingDirectory=/opt/stockbot
+EnvironmentFile=/opt/stockbot/.env
+ExecStart=/opt/stockbot/.venv/bin/python -m src.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
