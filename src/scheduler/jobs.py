@@ -42,11 +42,46 @@ class BotScheduler:
         self.scheduler.start()
         logger.info("Scheduler started")
 
+    async def _collect_symbols(self, users) -> set[tuple[str, str]]:
+        symbols: set[tuple[str, str]] = set()
+        for user in users:
+            if not user.onboarding_completed:
+                continue
+            portfolios = await self.repo.get_portfolios(user.telegram_id)
+            for portfolio in portfolios:
+                for holding in await self.repo.get_holdings(portfolio.id):
+                    symbols.add((holding.symbol, holding.market))
+            for item in await self.repo.get_watchlist(user.telegram_id):
+                symbols.add((item.symbol, item.market))
+            for rule in await self.repo.get_alert_rules(user.telegram_id):
+                if not rule.enabled:
+                    continue
+                cfg = rule.config
+                if cfg.get("symbol"):
+                    symbols.add((cfg["symbol"], cfg.get("market", "US")))
+        return symbols
+
     async def _check_report_schedule(self) -> None:
         now = datetime.now(pytz.timezone(TIMEZONE))
         current_hm = now.strftime("%H:%M")
         today = now.date().isoformat()
         users = await self.repo.get_all_users()
+
+        report_users = []
+        for user in users:
+            if not user.onboarding_completed:
+                continue
+            if now.day == 1 and current_hm == user.report_morning:
+                report_users.append(user)
+                continue
+            if not is_trading_day(now):
+                continue
+            if current_hm in (user.report_morning, user.report_evening):
+                report_users.append(user)
+
+        if report_users:
+            await self.prices.warm_cache(list(await self._collect_symbols(report_users)))
+
         for user in users:
             if not user.onboarding_completed:
                 continue
@@ -139,6 +174,7 @@ class BotScheduler:
         if not is_trading_day(now):
             return
         users = await self.repo.get_all_users()
+        await self.prices.warm_cache(list(await self._collect_symbols(users)))
         today = now.date().isoformat()
         for user in users:
             if not user.onboarding_completed:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -8,9 +11,16 @@ import finnhub
 import pytz
 import yfinance as yf
 
-from src.config import FINNHUB_API_KEY, PRICE_CACHE_SECONDS, TIMEZONE
+from src.config import (
+    FINNHUB_API_KEY,
+    NEWS_CACHE_SECONDS,
+    PRICE_CACHE_SECONDS,
+    QUOTE_RATE_LIMIT_PER_MINUTE,
+    TIMEZONE,
+)
 from src.market.calendar import us_market_session
 
+logger = logging.getLogger(__name__)
 BENCHMARKS = {
     "US": ("SPY", "US", "S&P 500 (SPY)"),
     "IL": ("TA35.TA", "IL", "TA-35"),
@@ -38,11 +48,34 @@ class Quote:
     avg_volume: float | None = None
 
 
+class _RateLimiter:
+    def __init__(self, max_per_minute: int) -> None:
+        self._max = max(1, max_per_minute)
+        self._times: deque[float] = deque()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        async with self._lock:
+            now = time.time()
+            while self._times and now - self._times[0] >= 60:
+                self._times.popleft()
+            if len(self._times) >= self._max:
+                wait = 60 - (now - self._times[0]) + 0.05
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                now = time.time()
+                while self._times and now - self._times[0] >= 60:
+                    self._times.popleft()
+            self._times.append(time.time())
+
+
 class PriceProvider:
     def __init__(self) -> None:
         self._cache: dict[str, tuple[float, Quote]] = {}
+        self._news_cache: dict[str, tuple[float, list[dict]]] = {}
         self._fx_cache: tuple[float, float] | None = None
         self._finnhub = finnhub.Client(api_key=FINNHUB_API_KEY) if FINNHUB_API_KEY else None
+        self._rate_limiter = _RateLimiter(QUOTE_RATE_LIMIT_PER_MINUTE)
 
     def _cache_key(self, symbol: str, market: str) -> str:
         return f"{market}:{symbol.upper()}"
@@ -77,6 +110,21 @@ class PriceProvider:
         if not quote:
             return name, None
         return name, quote.change_pct
+
+    async def warm_cache(self, symbols: list[tuple[str, str]]) -> int:
+        """Refresh stale quote cache entries once per unique symbol."""
+        unique = sorted({(symbol.upper(), market) for symbol, market in symbols})
+        fetched = 0
+        for symbol, market in unique:
+            key = self._cache_key(symbol, market)
+            if self._is_fresh(key):
+                continue
+            await self._rate_limiter.acquire()
+            await self.get_quote(symbol, market)
+            fetched += 1
+        if fetched:
+            logger.info("Quote cache warmed: %d/%d symbols", fetched, len(unique))
+        return fetched
 
     async def get_quote(self, symbol: str, market: str) -> Quote | None:
         key = self._cache_key(symbol, market)
@@ -336,15 +384,22 @@ class PriceProvider:
     async def get_company_news(self, symbol: str, market: str) -> list[dict]:
         if not self._finnhub or market != "US":
             return []
+        key = self._cache_key(symbol, market)
+        cached = self._news_cache.get(key)
+        if cached and (time.time() - cached[0]) < NEWS_CACHE_SECONDS:
+            return cached[1]
         try:
             from datetime import date, timedelta
 
+            await self._rate_limiter.acquire()
             today = date.today()
             week_ago = today - timedelta(days=7)
-            return self._finnhub.company_news(
+            news = self._finnhub.company_news(
                 symbol.upper(),
                 _from=week_ago.isoformat(),
                 to=today.isoformat(),
             )[:5]
+            self._news_cache[key] = (time.time(), news)
+            return news
         except Exception:
             return []
