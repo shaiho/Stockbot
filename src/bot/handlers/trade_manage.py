@@ -9,6 +9,7 @@ from src.bot.common import get_user_lang
 from src.bot.keyboards import trade_edit_fields_keyboard, trade_manage_keyboard
 from src.bot.states import EditTradeStates
 from src.bot.trade_helpers import trade_date_keyboard, trade_note_keyboard
+from src.portfolio.commission import calc_trade_commission
 from src.portfolio.formatter import fmt_date, fmt_money, format_trade_line
 from src.portfolio.trade_date import parse_trade_date
 
@@ -291,6 +292,15 @@ async def trade_edit_value(message: Message, state, **data) -> None:
             return
     elif field == "note":
         kwargs["note"] = text or None
+
+    if field in ("quantity", "price") and trade.action in ("buy", "sell"):
+        portfolio = await ctx.repo.get_portfolio(trade.portfolio_id, user.telegram_id)
+        if portfolio:
+            new_qty = kwargs.get("quantity", trade.quantity)
+            new_price = kwargs.get("price", trade.price)
+            kwargs["commission"] = calc_trade_commission(
+                portfolio, new_qty, new_price, trade.currency
+            )
 
     data["skip_menu_restore"] = True
     await _apply_trade_edit(
