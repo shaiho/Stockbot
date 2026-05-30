@@ -68,7 +68,7 @@ def yes_no_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 def zero_or_custom_keyboard(step: str, lang: str, prefix: str = "ob") -> InlineKeyboardMarkup:
     zero = "0 — אין" if lang == "he" else "0 — none"
-    custom = "✏️ הזן סכום" if lang == "he" else "✏️ Enter amount"
+    custom = "✏️ הזן סכום" if lang == "he" else "✏️ Type amount"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

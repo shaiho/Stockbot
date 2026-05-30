@@ -19,6 +19,13 @@ def trade_note_keyboard(lang: str) -> InlineKeyboardMarkup:
     )
 
 
+def trade_commission_keyboard(lang: str) -> InlineKeyboardMarkup:
+    label = "🔄 חישוב אוטומטי" if lang == "he" else "🔄 Auto calculate"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="trade_commission:auto")]]
+    )
+
+
 async def prompt_trade_note(message: Message, state, next_state, t: dict, lang: str) -> None:
     await state.set_state(next_state)
     await message.answer(t["trade_note_prompt"], reply_markup=trade_note_keyboard(lang))

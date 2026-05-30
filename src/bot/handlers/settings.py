@@ -74,7 +74,7 @@ async def settings_commission_start(callback: CallbackQuery, state, **data) -> N
     t = ctx.i18n.load(lang)
     await state.set_state(SettingsStates.commission)
     await callback.message.edit_text(
-        t["commission_prompt"],
+        t["default_commission"],
         reply_markup=zero_or_custom_keyboard("commission", lang, prefix="settings"),
     )
     await callback.answer()
@@ -87,7 +87,7 @@ async def settings_commission_pick(callback: CallbackQuery, state, **data) -> No
     t = ctx.i18n.load(lang)
     choice = callback.data.split(":")[2]
     if choice == "custom":
-        await callback.message.edit_text(t["commission_prompt"])
+        await callback.message.edit_text(t["default_commission_custom_prompt"])
         await callback.answer()
         return
     user.default_commission = 0.0

@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from src.bot.common import get_user_lang
 from src.bot.keyboards import trade_edit_fields_keyboard, trade_manage_keyboard
 from src.bot.states import EditTradeStates
-from src.bot.trade_helpers import trade_date_keyboard, trade_note_keyboard
+from src.bot.trade_helpers import trade_commission_keyboard, trade_date_keyboard, trade_note_keyboard
 from src.portfolio.commission import calc_trade_commission
 from src.portfolio.formatter import fmt_date, fmt_money, format_trade_line
 from src.portfolio.trade_date import parse_trade_date
@@ -173,6 +173,8 @@ async def trade_edit_field(callback: CallbackQuery, state, **data) -> None:
         reply_markup = trade_note_keyboard(lang)
     elif field == "date":
         reply_markup = trade_date_keyboard(lang)
+    elif field == "commission":
+        reply_markup = trade_commission_keyboard(lang)
     await callback.message.edit_text(prompts[field], reply_markup=reply_markup)
     await callback.answer()
 
@@ -216,6 +218,40 @@ async def trade_edit_note_skip(callback: CallbackQuery, state, **data) -> None:
         trade_id=trade_id,
         field="note",
         data={"note": None},
+    )
+    await callback.answer()
+
+
+@router.callback_query(EditTradeStates.value, F.data == "trade_commission:auto")
+async def trade_edit_commission_auto(callback: CallbackQuery, state, **data) -> None:
+    ctx = data["ctx"]
+    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
+    t = ctx.i18n.load(lang)
+    form = await state.get_data()
+    trade_id = form.get("trade_id")
+    if form.get("edit_field") != "commission" or not trade_id:
+        await callback.answer()
+        return
+    trade = await ctx.repo.get_trade(trade_id, user.telegram_id)
+    if not trade:
+        await callback.answer(t["trade_not_found"], show_alert=True)
+        return
+    portfolio = await ctx.repo.get_portfolio(trade.portfolio_id, user.telegram_id)
+    commission = (
+        calc_trade_commission(portfolio, trade.quantity, trade.price, trade.currency)
+        if portfolio
+        else 0.0
+    )
+    data["skip_menu_restore"] = True
+    await _apply_trade_edit(
+        callback.message,
+        state,
+        ctx,
+        user,
+        t,
+        trade_id=trade_id,
+        field="commission",
+        data={"commission": commission},
     )
     await callback.answer()
 
@@ -276,14 +312,26 @@ async def trade_edit_value(message: Message, state, **data) -> None:
             await message.answer(t["invalid_number"])
             return
     elif field == "commission":
+        if not text:
+            await message.answer(
+                t["commission_prompt"],
+                reply_markup=trade_commission_keyboard(lang),
+            )
+            return
         try:
-            kwargs["commission"] = float(text.replace(",", "")) if text else 0.0
+            kwargs["commission"] = float(text.replace(",", ""))
         except ValueError:
             await message.answer(t["invalid_number"])
             return
     elif field == "date":
+        if not text:
+            await message.answer(
+                t["trade_date_prompt"],
+                reply_markup=trade_date_keyboard(lang),
+            )
+            return
         try:
-            kwargs["timestamp"] = parse_trade_date(text or "today")
+            kwargs["timestamp"] = parse_trade_date(text)
         except ValueError as exc:
             if str(exc) == "future_date":
                 await message.answer(t["future_date"])
