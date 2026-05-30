@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.bot.common import get_user_lang
 from src.bot.keyboards import trade_edit_fields_keyboard, trade_manage_keyboard
 from src.bot.states import EditTradeStates
+from src.bot.trade_helpers import trade_date_keyboard, trade_note_keyboard
 from src.portfolio.formatter import fmt_date, fmt_money, format_trade_line
 from src.portfolio.trade_date import parse_trade_date
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 def _trade_detail(trade, t: dict) -> str:
@@ -34,8 +38,61 @@ def _trade_detail(trade, t: dict) -> str:
     return "\n".join(lines)
 
 
+def _field_label(field: str, t: dict) -> str:
+    labels = {
+        "quantity": t["quantity"],
+        "price": t["price"],
+        "commission": t["commissions"],
+        "date": "📅",
+        "note": t["trade_note"],
+    }
+    return labels.get(field, field)
+
+
+def _edit_prompts(t: dict) -> dict[str, str]:
+    return {
+        "quantity": t["quantity_prompt"],
+        "price": t["price_prompt"],
+        "commission": t["commission_prompt"],
+        "date": t["trade_date_prompt"],
+        "note": t["trade_note_prompt"],
+    }
+
+
+async def _apply_trade_edit(
+    message: Message,
+    state,
+    ctx,
+    user,
+    t: dict,
+    *,
+    trade_id: int,
+    field: str,
+    data: dict,
+) -> None:
+    try:
+        ok = await ctx.repo.update_trade(trade_id, user.telegram_id, **data)
+    except Exception:
+        logger.exception("update_trade failed trade_id=%s field=%s", trade_id, field)
+        await message.answer(t["trade_update_failed"])
+        return
+    if not ok:
+        await state.clear()
+        await message.answer(t["trade_not_found"])
+        return
+
+    updated = await ctx.repo.get_trade(trade_id, user.telegram_id)
+    await state.set_state(None)
+    await state.update_data(trade_id=trade_id)
+    field_label = _field_label(field, t)
+    await message.answer(
+        t["trade_updated_field"].format(field=field_label) + "\n\n" + _trade_detail(updated, t),
+        reply_markup=trade_edit_fields_keyboard(trade_id, t),
+    )
+
+
 @router.callback_query(F.data.startswith("trade_manage:"))
-async def trade_manage(callback: CallbackQuery, **data) -> None:
+async def trade_manage(callback: CallbackQuery, state, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
@@ -44,6 +101,7 @@ async def trade_manage(callback: CallbackQuery, **data) -> None:
     if not trade:
         await callback.answer(t["trade_not_found"], show_alert=True)
         return
+    await state.clear()
     await callback.message.answer(
         _trade_detail(trade, t),
         reply_markup=trade_manage_keyboard(trade_id, t),
@@ -61,8 +119,6 @@ async def trade_delete_prompt(callback: CallbackQuery, **data) -> None:
     if not trade:
         await callback.answer(t["trade_not_found"], show_alert=True)
         return
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -82,34 +138,17 @@ async def trade_delete_prompt(callback: CallbackQuery, **data) -> None:
 
 
 @router.callback_query(F.data.startswith("trade_del_confirm:"))
-async def trade_delete_confirm(callback: CallbackQuery, **data) -> None:
+async def trade_delete_confirm(callback: CallbackQuery, state, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     trade_id = int(callback.data.split(":")[1])
     ok = await ctx.repo.delete_trade(trade_id, user.telegram_id)
+    await state.clear()
     if ok:
         await callback.message.edit_text(t["trade_deleted"])
     else:
         await callback.message.edit_text(t["trade_not_found"])
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("trade_edit:"))
-async def trade_edit_start(callback: CallbackQuery, state, **data) -> None:
-    ctx = data["ctx"]
-    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
-    t = ctx.i18n.load(lang)
-    trade_id = int(callback.data.split(":")[1])
-    trade = await ctx.repo.get_trade(trade_id, user.telegram_id)
-    if not trade:
-        await callback.answer(t["trade_not_found"], show_alert=True)
-        return
-    await state.update_data(trade_id=trade_id)
-    await callback.message.edit_text(
-        t["edit_trade_field"],
-        reply_markup=trade_edit_fields_keyboard(trade_id, t),
-    )
     await callback.answer()
 
 
@@ -125,16 +164,82 @@ async def trade_edit_field(callback: CallbackQuery, state, **data) -> None:
     if not trade:
         await callback.answer(t["trade_not_found"], show_alert=True)
         return
-    prompts = {
-        "quantity": t["quantity_prompt"],
-        "price": t["price_prompt"],
-        "commission": t["commission_prompt"],
-        "date": t["trade_date_prompt"],
-        "note": t["trade_note_prompt"],
-    }
+    prompts = _edit_prompts(t)
     await state.update_data(trade_id=trade_id, edit_field=field)
     await state.set_state(EditTradeStates.value)
-    await callback.message.edit_text(prompts[field])
+    reply_markup = None
+    if field == "note":
+        reply_markup = trade_note_keyboard(lang)
+    elif field == "date":
+        reply_markup = trade_date_keyboard(lang)
+    await callback.message.edit_text(prompts[field], reply_markup=reply_markup)
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^trade_edit:\d+$"))
+async def trade_edit_start(callback: CallbackQuery, state, **data) -> None:
+    ctx = data["ctx"]
+    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
+    t = ctx.i18n.load(lang)
+    trade_id = int(callback.data.split(":")[1])
+    trade = await ctx.repo.get_trade(trade_id, user.telegram_id)
+    if not trade:
+        await callback.answer(t["trade_not_found"], show_alert=True)
+        return
+    await state.set_state(None)
+    await state.update_data(trade_id=trade_id)
+    await callback.message.edit_text(
+        t["edit_trade_field"],
+        reply_markup=trade_edit_fields_keyboard(trade_id, t),
+    )
+    await callback.answer()
+
+
+@router.callback_query(EditTradeStates.value, F.data == "trade_note:skip")
+async def trade_edit_note_skip(callback: CallbackQuery, state, **data) -> None:
+    ctx = data["ctx"]
+    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
+    t = ctx.i18n.load(lang)
+    form = await state.get_data()
+    trade_id = form.get("trade_id")
+    if form.get("edit_field") != "note" or not trade_id:
+        await callback.answer()
+        return
+    data["skip_menu_restore"] = True
+    await _apply_trade_edit(
+        callback.message,
+        state,
+        ctx,
+        user,
+        t,
+        trade_id=trade_id,
+        field="note",
+        data={"note": None},
+    )
+    await callback.answer()
+
+
+@router.callback_query(EditTradeStates.value, F.data == "trade_date:today")
+async def trade_edit_date_today(callback: CallbackQuery, state, **data) -> None:
+    ctx = data["ctx"]
+    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
+    t = ctx.i18n.load(lang)
+    form = await state.get_data()
+    trade_id = form.get("trade_id")
+    if form.get("edit_field") != "date" or not trade_id:
+        await callback.answer()
+        return
+    data["skip_menu_restore"] = True
+    await _apply_trade_edit(
+        callback.message,
+        state,
+        ctx,
+        user,
+        t,
+        trade_id=trade_id,
+        field="date",
+        data={"timestamp": parse_trade_date(None)},
+    )
     await callback.answer()
 
 
@@ -187,13 +292,14 @@ async def trade_edit_value(message: Message, state, **data) -> None:
     elif field == "note":
         kwargs["note"] = text or None
 
-    ok = await ctx.repo.update_trade(trade_id, user.telegram_id, **kwargs)
-    await state.clear()
-    if ok:
-        updated = await ctx.repo.get_trade(trade_id, user.telegram_id)
-        await message.answer(
-            t["trade_updated"] + "\n\n" + _trade_detail(updated, t),
-            reply_markup=trade_manage_keyboard(trade_id, t),
-        )
-    else:
-        await message.answer(t["trade_not_found"])
+    data["skip_menu_restore"] = True
+    await _apply_trade_edit(
+        message,
+        state,
+        ctx,
+        user,
+        t,
+        trade_id=trade_id,
+        field=field,
+        data=kwargs,
+    )

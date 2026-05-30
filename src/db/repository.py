@@ -16,6 +16,8 @@ try:
 except ImportError:  # pragma: no cover
     asyncpg = None  # type: ignore[assignment]
 
+_UNSET = object()
+
 
 class Repository:
     def __init__(self, db_path: Path | None = None, database_url: str | None = None) -> None:
@@ -92,6 +94,23 @@ class Repository:
         if isinstance(value, datetime):
             return value.isoformat(sep=" ", timespec="seconds")
         return str(value)
+
+    @staticmethod
+    def _coerce_timestamp(value: Any) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        text = str(value).strip()
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S",
+        ):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
     async def get_or_create_user(self, telegram_id: int) -> User:
         if self._postgres:
@@ -401,7 +420,7 @@ class Repository:
                         RETURNING *
                         """,
                         *base_args,
-                        timestamp,
+                        self._coerce_timestamp(timestamp),
                     )
                 else:
                     row = await conn.fetchrow(
@@ -533,34 +552,41 @@ class Repository:
         price: float | None = None,
         commission: float | None = None,
         timestamp: str | None = None,
-        note: str | None = None,
+        note: Any = _UNSET,
     ) -> bool:
         trade = await self.get_trade(trade_id, user_id)
         if not trade:
             return False
-        query = """
-            UPDATE trades SET
-                quantity = ?, price = ?, commission = ?, timestamp = ?, note = ?
-            WHERE id = ?
-        """
-        args = (
-            quantity if quantity is not None else trade.quantity,
-            price if price is not None else trade.price,
-            commission if commission is not None else trade.commission,
-            timestamp if timestamp is not None else trade.timestamp,
-            note if note is not None else trade.note,
-            trade_id,
-        )
+
+        updates: dict[str, Any] = {}
+        if quantity is not None:
+            updates["quantity"] = quantity
+        if price is not None:
+            updates["price"] = price
+        if commission is not None:
+            updates["commission"] = commission
+        if timestamp is not None:
+            updates["timestamp"] = (
+                self._coerce_timestamp(timestamp) if self._postgres else timestamp
+            )
+        if note is not _UNSET:
+            updates["note"] = note
+        if not updates:
+            return True
+
+        set_clause = ", ".join(f"{column} = ?" for column in updates)
+        query = f"UPDATE trades SET {set_clause} WHERE id = ?"
+        args = (*updates.values(), trade_id)
         if self._postgres:
             assert self._pool is not None
             async with self._pool.acquire() as conn:
-                await conn.execute(self._sql(query, True), *args)
-            return True
+                result = await conn.execute(self._sql(query, True), *args)
+                return result.endswith("1")
 
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(self._sql(query, False), args)
+            cursor = await db.execute(self._sql(query, False), args)
             await db.commit()
-            return True
+            return cursor.rowcount > 0
 
     async def get_trades(self, portfolio_id: int) -> list[Trade]:
         query = "SELECT * FROM trades WHERE portfolio_id = ? ORDER BY timestamp, id"
