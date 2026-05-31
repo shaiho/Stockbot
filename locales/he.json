@@ -205,7 +205,7 @@
   "allocation_by_currency": "הקצאה לפי מטבע",
   "market_us_short": "🇺🇸 ארה\"ב",
   "market_il_short": "🇮🇱 ישראל",
-  "benchmark_title": "השוואה ל-benchmark (יומי)",
+  "benchmark_title": "השוואה למדדים (יומי)",
   "portfolio_daily": "התיק",
   "help_commands": "📖 פקודות:\n/menu — תפריט ראשי\n/pnl [SYMBOL] — רווח/הפסד\n/quote [SYMBOL] — מחיר\n/alerts — התראות\n/help — עזרה\n\n💡 התיק האחרון נזכר אוטומטית.",
   "quick_alert": "🔔 התראה",

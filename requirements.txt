@@ -7,4 +7,3 @@ apscheduler>=3.10
 python-dotenv>=1.0
 pytz>=2024.1
 Pillow>=10.0
-python-bidi>=0.4

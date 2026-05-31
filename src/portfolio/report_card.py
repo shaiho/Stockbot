@@ -7,7 +7,6 @@ from pathlib import Path
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
-from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
 from src.portfolio.benchmark import BenchmarkComparison
@@ -91,10 +90,82 @@ def _has_hebrew(text: str) -> bool:
     return any("\u0590" <= ch <= "\u05ff" for ch in text)
 
 
-def _hebrew_label(text: str, lang: str) -> str:
-    if lang == "he" and _has_hebrew(text):
-        return get_display(text)
-    return text
+def _has_latin(text: str) -> bool:
+    return any(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in text)
+
+
+def _card_label(text: str) -> str:
+    """Normalize labels for Noto Sans Hebrew (no slash, no embedded Latin words)."""
+    out = text.replace("/", " · ")
+    out = out.replace("benchmark", "מדדים").replace("Benchmark", "מדדים")
+    return out
+
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+
+def _draw_rtl(
+    draw: ImageDraw.ImageDraw,
+    x_right: int,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: str,
+    *,
+    sanitize: bool = True,
+) -> None:
+    label = _card_label(text) if sanitize else text
+    draw.text((x_right, y), label, font=font, fill=fill, anchor="ra", direction="rtl")
+
+
+def _draw_rtl_center(
+    draw: ImageDraw.ImageDraw,
+    x_center: int,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: str,
+    *,
+    sanitize: bool = True,
+) -> None:
+    label = _card_label(text) if sanitize else text
+    draw.text((x_center, y), label, font=font, fill=fill, anchor="ma", direction="rtl")
+
+
+def _draw_ltr_left(
+    draw: ImageDraw.ImageDraw,
+    x_left: int,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: str,
+) -> None:
+    draw.text((x_left, y), text, font=font, fill=fill)
+
+
+def _draw_ltr_right(
+    draw: ImageDraw.ImageDraw,
+    x_right: int,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: str,
+) -> None:
+    width, _ = _text_size(draw, text, font)
+    draw.text((x_right - width, y), text, font=font, fill=fill)
+
+
+def _draw_center(
+    draw: ImageDraw.ImageDraw,
+    x_center: int,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: str,
+) -> None:
+    draw.text((x_center, y), text, font=font, fill=fill, anchor="ma")
 
 
 def _pick_font(
@@ -105,7 +176,7 @@ def _pick_font(
     hebrew_key: str = "hebrew_label",
     latin_key: str = "latin_label",
 ) -> ImageFont.ImageFont:
-    if lang == "he" and _has_hebrew(text):
+    if lang == "he" and _has_hebrew(text) and not _has_latin(_card_label(text)):
         return fonts[hebrew_key]
     return fonts[latin_key]
 
@@ -172,15 +243,17 @@ def _metric_row(
     if bg:
         _rounded_rect(draw, (x0, y, x1, y + row_h), 14, bg)
 
-    label_text = _hebrew_label(label, lang)
     label_font = _pick_font(label, lang, fonts)
     value_font = fonts["latin_value"]
     if lang == "he":
-        draw.text((x1 - 16, y + 16), label_text, font=label_font, fill=MUTED, anchor="ra")
-        draw.text((x0 + 16, y + 16), value, font=value_font, fill=value_color, anchor="la")
+        if _has_hebrew(label):
+            _draw_rtl(draw, x1 - 16, y + 16, label, label_font, MUTED)
+        else:
+            _draw_ltr_right(draw, x1 - 16, y + 16, label, label_font, MUTED)
+        _draw_ltr_left(draw, x0 + 16, y + 16, value, value_font, value_color)
     else:
-        draw.text((x0 + 16, y + 16), label_text, font=label_font, fill=MUTED, anchor="la")
-        draw.text((x1 - 16, y + 16), value, font=value_font, fill=value_color, anchor="ra")
+        _draw_ltr_left(draw, x0 + 16, y + 16, label, label_font, MUTED)
+        _draw_ltr_right(draw, x1 - 16, y + 16, value, value_font, value_color)
     return y + row_h + 10
 
 
@@ -191,12 +264,11 @@ def _section_title(
     lang: str,
     fonts: dict[str, ImageFont.ImageFont],
 ) -> int:
-    text = _hebrew_label(title, lang)
     font = _pick_font(title, lang, fonts, hebrew_key="hebrew_section", latin_key="latin_section")
-    if lang == "he":
-        draw.text((WIDTH - PAD - 16, y), text, font=font, fill=TEXT, anchor="ra")
+    if lang == "he" and _has_hebrew(title):
+        _draw_rtl(draw, WIDTH - PAD - 16, y, title, font, TEXT)
     else:
-        draw.text((PAD + 16, y), text, font=font, fill=TEXT, anchor="la")
+        _draw_ltr_left(draw, PAD + 16, y, title, font, TEXT)
     draw.line((PAD + 16, y + 28, WIDTH - PAD - 16, y + 28), fill=LINE, width=2)
     return y + 40
 
@@ -232,6 +304,11 @@ async def send_report_card(
 
 
 def render_report_card(data: ReportCardData, t: dict) -> bytes:
+    from PIL import features
+
+    if data.lang == "he" and not features.check("raqm"):
+        logger.warning("libraqm not available — Hebrew report card text may render incorrectly")
+
     if data.subtitle:
         header = data.subtitle
     elif data.morning is not None:
@@ -255,7 +332,6 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
     _rounded_rect(draw, (PAD, card_top, WIDTH - PAD, card_bottom), CARD_RADIUS, CARD)
 
     y = card_top + 28
-    title_text = _hebrew_label(data.portfolio_name, data.lang)
     title_font = _pick_font(
         data.portfolio_name,
         data.lang,
@@ -263,13 +339,14 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
         hebrew_key="hebrew_title",
         latin_key="latin_title",
     )
-    if data.lang == "he":
-        draw.text((WIDTH - PAD - 24, y), title_text, font=title_font, fill=TEXT, anchor="ra")
+    if data.lang == "he" and _has_hebrew(data.portfolio_name):
+        _draw_rtl(draw, WIDTH - PAD - 24, y, data.portfolio_name, title_font, TEXT)
+    elif data.lang == "he":
+        _draw_ltr_right(draw, WIDTH - PAD - 24, y, data.portfolio_name, title_font, TEXT)
     else:
-        draw.text((PAD + 24, y), title_text, font=title_font, fill=TEXT, anchor="la")
+        _draw_ltr_left(draw, PAD + 24, y, data.portfolio_name, title_font, TEXT)
     y += 42
 
-    subtitle_text = _hebrew_label(header, data.lang)
     subtitle_font = _pick_font(
         header,
         data.lang,
@@ -277,23 +354,28 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
         hebrew_key="hebrew_subtitle",
         latin_key="latin_subtitle",
     )
-    if data.lang == "he":
-        draw.text((WIDTH - PAD - 24, y), subtitle_text, font=subtitle_font, fill=MUTED, anchor="ra")
+    if data.lang == "he" and _has_hebrew(header):
+        _draw_rtl(draw, WIDTH - PAD - 24, y, header, subtitle_font, MUTED)
+    elif data.lang == "he":
+        _draw_ltr_right(draw, WIDTH - PAD - 24, y, header, subtitle_font, MUTED)
     else:
-        draw.text((PAD + 24, y), subtitle_text, font=subtitle_font, fill=MUTED, anchor="la")
+        _draw_ltr_left(draw, PAD + 24, y, header, subtitle_font, MUTED)
     y += 36
 
     total_text = f"₪{data.total_ils:,.0f}  |  ${data.total_usd:,.2f}"
-    draw.text((WIDTH // 2, y), total_text, font=fonts["latin_hero"], fill=ACCENT, anchor="ma")
+    _draw_center(draw, WIDTH // 2, y, total_text, fonts["latin_hero"], ACCENT)
     y += 58
-    total_label = _hebrew_label(t["total_value"], data.lang)
-    draw.text(
-        (WIDTH // 2, y),
-        total_label,
-        font=fonts["hebrew_small"] if data.lang == "he" else fonts["latin_small"],
-        fill=MUTED,
-        anchor="ma",
-    )
+    if data.lang == "he":
+        _draw_rtl_center(
+            draw,
+            WIDTH // 2,
+            y,
+            t["total_value"],
+            fonts["hebrew_small"],
+            MUTED,
+        )
+    else:
+        _draw_center(draw, WIDTH // 2, y, t["total_value"], fonts["latin_small"], MUTED)
     y += 44
 
     daily_value = fmt_dual_ils_usd(data.daily_change_ils, data.fx, show_plus=True)
@@ -360,13 +442,7 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
             color = GREEN if daily_pnl >= 0 else RED
             y = _metric_row(draw, y, symbol, value, lang=data.lang, fonts=fonts, value_color=color)
 
-    draw.text(
-        (WIDTH // 2, card_bottom - 22),
-        "Stockbot",
-        font=fonts["latin_small"],
-        fill=MUTED,
-        anchor="ma",
-    )
+    _draw_center(draw, WIDTH // 2, card_bottom - 22, "Stockbot", fonts["latin_small"], MUTED)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
