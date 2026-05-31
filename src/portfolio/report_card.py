@@ -95,10 +95,11 @@ def _has_latin(text: str) -> bool:
 
 
 def _card_label(text: str) -> str:
-    """Normalize labels for Noto Sans Hebrew (no slash, no embedded Latin words)."""
-    out = text.replace("/", " · ")
+    """Normalize labels for Noto Sans Hebrew (basic Hebrew letters only)."""
+    out = text.replace("/", " ו")
+    out = out.replace("(", "").replace(")", "")
     out = out.replace("benchmark", "מדדים").replace("Benchmark", "מדדים")
-    return out
+    return " ".join(out.split())
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
