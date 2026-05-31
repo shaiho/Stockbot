@@ -87,31 +87,63 @@ def build_report_card_data(
     )
 
 
-def _label(text: str, lang: str) -> str:
-    if lang == "he":
+def _has_hebrew(text: str) -> bool:
+    return any("\u0590" <= ch <= "\u05ff" for ch in text)
+
+
+def _hebrew_label(text: str, lang: str) -> str:
+    if lang == "he" and _has_hebrew(text):
         return get_display(text)
     return text
 
 
-def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    names = (
-        ("NotoSansHebrew-Bold.ttf", "NotoSansHebrew-Regular.ttf")
-        if bold
-        else ("NotoSansHebrew-Regular.ttf", "NotoSansHebrew-Bold.ttf")
-    )
-    for name in names:
-        path = FONT_DIR / name
-        if path.exists():
-            return ImageFont.truetype(str(path), size=size)
-    for fallback in (
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansHebrew-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
-        if Path(fallback).exists():
-            return ImageFont.truetype(fallback, size=size)
-    return ImageFont.load_default()
+def _pick_font(
+    text: str,
+    lang: str,
+    fonts: dict[str, ImageFont.ImageFont],
+    *,
+    hebrew_key: str = "hebrew_label",
+    latin_key: str = "latin_label",
+) -> ImageFont.ImageFont:
+    if lang == "he" and _has_hebrew(text):
+        return fonts[hebrew_key]
+    return fonts[latin_key]
+
+
+def _load_font_file(name: str, size: int) -> ImageFont.FreeTypeFont | None:
+    path = FONT_DIR / name
+    if path.exists():
+        return ImageFont.truetype(str(path), size=size)
+    return None
+
+
+def _load_fonts() -> dict[str, ImageFont.ImageFont]:
+    sizes = {
+        "title": 34,
+        "subtitle": 22,
+        "hero": 40,
+        "label": 22,
+        "value": 24,
+        "section": 24,
+        "small": 20,
+    }
+    fonts: dict[str, ImageFont.ImageFont] = {}
+    for key, size in sizes.items():
+        bold = key in {"title", "hero", "value", "section"}
+        latin = _load_font_file("NotoSans-Bold.ttf" if bold else "NotoSans-Regular.ttf", size)
+        hebrew = _load_font_file(
+            "NotoSansHebrew-Bold.ttf" if bold else "NotoSansHebrew-Regular.ttf",
+            size,
+        )
+        if latin is None:
+            latin = hebrew or ImageFont.load_default()
+        if hebrew is None:
+            hebrew = latin
+        fonts[f"latin_{key}"] = latin
+        fonts[f"hebrew_{key}"] = hebrew
+    fonts["latin"] = fonts["latin_value"]
+    fonts["hebrew"] = fonts["hebrew_label"]
+    return fonts
 
 
 def _rounded_rect(
@@ -140,9 +172,9 @@ def _metric_row(
     if bg:
         _rounded_rect(draw, (x0, y, x1, y + row_h), 14, bg)
 
-    label_font = fonts["label"]
-    value_font = fonts["value"]
-    label_text = _label(label, lang)
+    label_text = _hebrew_label(label, lang)
+    label_font = _pick_font(label, lang, fonts)
+    value_font = fonts["latin_value"]
     if lang == "he":
         draw.text((x1 - 16, y + 16), label_text, font=label_font, fill=MUTED, anchor="ra")
         draw.text((x0 + 16, y + 16), value, font=value_font, fill=value_color, anchor="la")
@@ -152,8 +184,15 @@ def _metric_row(
     return y + row_h + 10
 
 
-def _section_title(draw: ImageDraw.ImageDraw, y: int, title: str, lang: str, font: ImageFont.ImageFont) -> int:
-    text = _label(title, lang)
+def _section_title(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    title: str,
+    lang: str,
+    fonts: dict[str, ImageFont.ImageFont],
+) -> int:
+    text = _hebrew_label(title, lang)
+    font = _pick_font(title, lang, fonts, hebrew_key="hebrew_section", latin_key="latin_section")
     if lang == "he":
         draw.text((WIDTH - PAD - 16, y), text, font=font, fill=TEXT, anchor="ra")
     else:
@@ -195,13 +234,10 @@ async def send_report_card(
 def render_report_card(data: ReportCardData, t: dict) -> bytes:
     if data.subtitle:
         header = data.subtitle
-        emoji = data.subtitle_emoji or "📊"
     elif data.morning is not None:
         header = t["morning_report"] if data.morning else t["evening_report"]
-        emoji = "🌅" if data.morning else "🌙"
     else:
         header = t["portfolio_summary"]
-        emoji = "📊"
 
     row_count = 3
     if data.benchmark:
@@ -212,39 +248,52 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
 
     img = Image.new("RGB", (WIDTH, height), BG)
     draw = ImageDraw.Draw(img)
-    fonts = {
-        "title": _load_font(34, bold=True),
-        "subtitle": _load_font(22),
-        "hero": _load_font(40, bold=True),
-        "label": _load_font(22),
-        "value": _load_font(24, bold=True),
-        "section": _load_font(24, bold=True),
-        "small": _load_font(20),
-    }
+    fonts = _load_fonts()
 
     card_top = PAD
     card_bottom = height - PAD
     _rounded_rect(draw, (PAD, card_top, WIDTH - PAD, card_bottom), CARD_RADIUS, CARD)
 
     y = card_top + 28
-    title = _label(data.portfolio_name, data.lang)
+    title_text = _hebrew_label(data.portfolio_name, data.lang)
+    title_font = _pick_font(
+        data.portfolio_name,
+        data.lang,
+        fonts,
+        hebrew_key="hebrew_title",
+        latin_key="latin_title",
+    )
     if data.lang == "he":
-        draw.text((WIDTH - PAD - 24, y), title, font=fonts["title"], fill=TEXT, anchor="ra")
+        draw.text((WIDTH - PAD - 24, y), title_text, font=title_font, fill=TEXT, anchor="ra")
     else:
-        draw.text((PAD + 24, y), title, font=fonts["title"], fill=TEXT, anchor="la")
+        draw.text((PAD + 24, y), title_text, font=title_font, fill=TEXT, anchor="la")
     y += 42
-    subtitle = f"{emoji} {_label(header, data.lang)}"
+
+    subtitle_text = _hebrew_label(header, data.lang)
+    subtitle_font = _pick_font(
+        header,
+        data.lang,
+        fonts,
+        hebrew_key="hebrew_subtitle",
+        latin_key="latin_subtitle",
+    )
     if data.lang == "he":
-        draw.text((WIDTH - PAD - 24, y), subtitle, font=fonts["subtitle"], fill=MUTED, anchor="ra")
+        draw.text((WIDTH - PAD - 24, y), subtitle_text, font=subtitle_font, fill=MUTED, anchor="ra")
     else:
-        draw.text((PAD + 24, y), subtitle, font=fonts["subtitle"], fill=MUTED, anchor="la")
+        draw.text((PAD + 24, y), subtitle_text, font=subtitle_font, fill=MUTED, anchor="la")
     y += 36
 
     total_text = f"₪{data.total_ils:,.0f}  |  ${data.total_usd:,.2f}"
-    draw.text((WIDTH // 2, y), total_text, font=fonts["hero"], fill=ACCENT, anchor="ma")
+    draw.text((WIDTH // 2, y), total_text, font=fonts["latin_hero"], fill=ACCENT, anchor="ma")
     y += 58
-    total_label = _label(t["total_value"], data.lang)
-    draw.text((WIDTH // 2, y), total_label, font=fonts["small"], fill=MUTED, anchor="ma")
+    total_label = _hebrew_label(t["total_value"], data.lang)
+    draw.text(
+        (WIDTH // 2, y),
+        total_label,
+        font=fonts["hebrew_small"] if data.lang == "he" else fonts["latin_small"],
+        fill=MUTED,
+        anchor="ma",
+    )
     y += 44
 
     daily_value = fmt_dual_ils_usd(data.daily_change_ils, data.fx, show_plus=True)
@@ -283,7 +332,7 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
     y += 8
 
     if data.benchmark:
-        y = _section_title(draw, y, t["benchmark_title"], data.lang, fonts["section"])
+        y = _section_title(draw, y, t["benchmark_title"], data.lang, fonts)
         bench_rows = [
             (t["portfolio_daily"], fmt_pct(data.benchmark.portfolio_daily_pct)),
             (
@@ -304,15 +353,20 @@ def render_report_card(data: ReportCardData, t: dict) -> bytes:
         y += 4
 
     if data.top_movers:
-        y = _section_title(draw, y, t["daily_pnl_by_symbol"], data.lang, fonts["section"])
+        y = _section_title(draw, y, t["daily_pnl_by_symbol"], data.lang, fonts)
         for symbol, daily_pnl, currency, change_pct in data.top_movers:
             pct = f" ({fmt_pct(change_pct)})" if change_pct is not None else ""
             value = f"{fmt_money(daily_pnl, currency, show_plus=True)}{pct}"
             color = GREEN if daily_pnl >= 0 else RED
             y = _metric_row(draw, y, symbol, value, lang=data.lang, fonts=fonts, value_color=color)
 
-    footer = "Stockbot"
-    draw.text((WIDTH // 2, card_bottom - 22), footer, font=fonts["small"], fill=MUTED, anchor="ma")
+    draw.text(
+        (WIDTH // 2, card_bottom - 22),
+        "Stockbot",
+        font=fonts["latin_small"],
+        fill=MUTED,
+        anchor="ma",
+    )
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
