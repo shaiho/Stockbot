@@ -35,6 +35,7 @@ from src.portfolio.formatter import (
     format_tax_report,
     format_trade_history,
 )
+from src.portfolio.report_card import send_report_card
 from src.portfolio.returns import compute_period_returns
 
 router = Router()
@@ -159,6 +160,17 @@ async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
     period = await compute_period_returns(trades, to_ils)
     allocation = await compute_allocation(holdings, cash_ils, cash_usd, ctx.prices)
     benchmark = await compute_benchmark_comparison(summary, ctx.prices)
+    await send_report_card(
+        message.bot,
+        message.chat.id,
+        summary,
+        portfolio.name,
+        lang=lang,
+        t=t,
+        benchmark=benchmark,
+        subtitle=t["portfolio_summary"],
+        subtitle_emoji="📊",
+    )
     text_parts = format_portfolio_summary_parts(
         summary,
         portfolio.name,

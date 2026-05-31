@@ -6,7 +6,6 @@ from datetime import datetime
 
 import pytz
 from aiogram import Bot
-from aiogram.types import BufferedInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -20,7 +19,7 @@ from src.portfolio.formatter import HTML, format_daily_report, format_monthly_re
 from src.portfolio.allocation import compute_allocation
 from src.portfolio.benchmark import compute_benchmark_comparison
 from src.portfolio.returns import compute_period_returns
-from src.portfolio.report_card import build_report_card_data, render_report_card
+from src.portfolio.report_card import send_report_card
 
 logger = logging.getLogger(__name__)
 
@@ -157,23 +156,16 @@ class BotScheduler:
                 )
                 benchmark = await compute_benchmark_comparison(summary, self.prices)
                 text = format_daily_report(summary, portfolio.name, t, morning=morning)
-                card_data = build_report_card_data(
+                await send_report_card(
+                    self.bot,
+                    user.telegram_id,
                     summary,
                     portfolio.name,
-                    morning=morning,
                     lang=user.language,
+                    t=t,
                     benchmark=benchmark,
+                    morning=morning,
                 )
-                try:
-                    png = render_report_card(card_data, t)
-                    photo = BufferedInputFile(png, filename="daily_report.png")
-                    await self.bot.send_photo(user.telegram_id, photo)
-                except Exception:
-                    logger.exception(
-                        "Report card failed for user %s portfolio %s",
-                        user.telegram_id,
-                        portfolio.id,
-                    )
                 await self.bot.send_message(user.telegram_id, text, parse_mode=HTML)
                 await self.repo.mark_alert_sent(user.telegram_id, report_key, today)
             except Exception as exc:

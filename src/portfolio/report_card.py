@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import io
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from aiogram import Bot
+from aiogram.types import BufferedInputFile
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
@@ -26,11 +29,12 @@ RED_BG = "#fee2e2"
 ACCENT = "#2563eb"
 LINE = "#e2e8f0"
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ReportCardData:
     portfolio_name: str
-    morning: bool
     lang: str
     total_ils: float
     total_usd: float
@@ -42,15 +46,20 @@ class ReportCardData:
     cash_usd: float
     benchmark: BenchmarkComparison | None
     top_movers: list[tuple[str, float, str, float | None]]
+    subtitle: str | None = None
+    subtitle_emoji: str | None = None
+    morning: bool | None = None
 
 
 def build_report_card_data(
     summary: PortfolioSummary,
     portfolio_name: str,
     *,
-    morning: bool,
     lang: str,
     benchmark: BenchmarkComparison | None = None,
+    morning: bool | None = None,
+    subtitle: str | None = None,
+    subtitle_emoji: str | None = None,
     top_n: int = 5,
 ) -> ReportCardData:
     movers = [item for item in summary.symbol_pnls if item.daily_pnl is not None]
@@ -61,7 +70,6 @@ def build_report_card_data(
     ]
     return ReportCardData(
         portfolio_name=portfolio_name,
-        morning=morning,
         lang=lang,
         total_ils=summary.total_ils,
         total_usd=summary.total_usd,
@@ -73,6 +81,9 @@ def build_report_card_data(
         cash_usd=summary.cash_usd,
         benchmark=benchmark,
         top_movers=top_movers,
+        subtitle=subtitle,
+        subtitle_emoji=subtitle_emoji,
+        morning=morning,
     )
 
 
@@ -151,9 +162,46 @@ def _section_title(draw: ImageDraw.ImageDraw, y: int, title: str, lang: str, fon
     return y + 40
 
 
+async def send_report_card(
+    bot: Bot,
+    chat_id: int,
+    summary: PortfolioSummary,
+    portfolio_name: str,
+    *,
+    lang: str,
+    t: dict,
+    benchmark: BenchmarkComparison | None,
+    morning: bool | None = None,
+    subtitle: str | None = None,
+    subtitle_emoji: str | None = None,
+) -> None:
+    card_data = build_report_card_data(
+        summary,
+        portfolio_name,
+        lang=lang,
+        benchmark=benchmark,
+        morning=morning,
+        subtitle=subtitle,
+        subtitle_emoji=subtitle_emoji,
+    )
+    try:
+        png = render_report_card(card_data, t)
+        photo = BufferedInputFile(png, filename="report_card.png")
+        await bot.send_photo(chat_id, photo)
+    except Exception:
+        logger.exception("Report card render failed for chat %s", chat_id)
+
+
 def render_report_card(data: ReportCardData, t: dict) -> bytes:
-    header = t["morning_report"] if data.morning else t["evening_report"]
-    emoji = "🌅" if data.morning else "🌙"
+    if data.subtitle:
+        header = data.subtitle
+        emoji = data.subtitle_emoji or "📊"
+    elif data.morning is not None:
+        header = t["morning_report"] if data.morning else t["evening_report"]
+        emoji = "🌅" if data.morning else "🌙"
+    else:
+        header = t["portfolio_summary"]
+        emoji = "📊"
 
     row_count = 3
     if data.benchmark:
