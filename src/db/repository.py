@@ -157,7 +157,7 @@ class Repository:
         """
         args = (
             user.language,
-            int(user.onboarding_completed),
+            bool(user.onboarding_completed),
             user.default_commission,
             user.default_commission_currency,
             user.report_morning,
