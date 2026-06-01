@@ -10,7 +10,7 @@ from aiogram.types import ErrorEvent, TelegramObject
 from typing import Any, Awaitable, Callable
 
 from src.bot.common import BotContext
-from src.bot.handlers import admin, alerts, cash, commands, fallback, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
+from src.bot.handlers import admin, alerts, cash, commands, corporate_actions, fallback, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
 from src.bot.i18n import i18n
 from src.bot.logging_middleware import UpdateLoggingMiddleware
 from src.bot.middleware import MenuRestoreMiddleware
@@ -61,6 +61,7 @@ async def main() -> None:
     async def on_error(event: ErrorEvent) -> None:
         logger.exception("Unhandled update %s", event.update.update_id, exc_info=event.exception)
 
+    dp.include_router(corporate_actions.router)
     dp.include_router(admin.router)
     dp.include_router(onboarding.router)
     dp.include_router(commands.router)

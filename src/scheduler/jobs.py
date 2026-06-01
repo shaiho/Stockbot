@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
+from collections import defaultdict
 from datetime import datetime
 
 import pytz
@@ -10,9 +12,31 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bot.i18n import I18n
-from src.config import MIN_ALERT_CHECK_MINUTES, QUOTE_RATE_LIMIT_PER_MINUTE, TIMEZONE
+from src.config import (
+    HOLIDAY_REFRESH_DAYS,
+    MARKET_EVENTS_CHECK_MINUTES,
+    MIN_ALERT_CHECK_MINUTES,
+    QUOTE_RATE_LIMIT_PER_MINUTE,
+    TIMEZONE,
+)
 from src.db.repository import Repository
 from src.market.calendar import is_trading_day
+from src.bot.corporate_action_notify import (
+    build_dividend_message,
+    build_split_message,
+    is_actionable_event,
+)
+from src.market.events import (
+    EVENT_DIVIDEND,
+    EVENT_INDEX,
+    EVENT_IPO,
+    EVENT_MARKET_HOLIDAY,
+    EVENT_REVERSE_SPLIT,
+    EVENT_SPLIT,
+    MarketEventsProvider,
+)
+from src.market.holidays import is_market_open, refresh_holiday_calendars
+from src.portfolio.corporate_actions import find_active_holdings
 from src.market.prices import PriceProvider
 from src.portfolio.calculator import PortfolioCalculator
 from src.portfolio.formatter import HTML, format_daily_report, format_monthly_report
@@ -38,6 +62,7 @@ class BotScheduler:
         self.prices = prices
         self.calculator = calculator
         self.i18n = i18n
+        self.events = MarketEventsProvider(prices)
         self.scheduler = AsyncIOScheduler(timezone=pytz.timezone(TIMEZONE))
         self._alert_interval_minutes = MIN_ALERT_CHECK_MINUTES
 
@@ -50,7 +75,22 @@ class BotScheduler:
             id="alert_check",
             replace_existing=True,
         )
+        self.scheduler.add_job(
+            self._check_market_events,
+            "interval",
+            minutes=MARKET_EVENTS_CHECK_MINUTES,
+            id="market_events",
+            replace_existing=True,
+        )
+        self.scheduler.add_job(
+            self._refresh_holiday_calendars,
+            "interval",
+            days=HOLIDAY_REFRESH_DAYS,
+            id="holiday_refresh",
+            replace_existing=True,
+        )
         self.scheduler.start()
+        asyncio.create_task(self._refresh_holiday_calendars())
         logger.info("Scheduler started")
 
     @staticmethod
@@ -82,6 +122,13 @@ class BotScheduler:
             )
         self._alert_interval_minutes = interval
 
+    async def _refresh_holiday_calendars(self) -> None:
+        try:
+            us_count, tase_count = await asyncio.to_thread(refresh_holiday_calendars, force=True)
+            logger.info("Holiday calendars refreshed: US=%d TASE=%d", us_count, tase_count)
+        except Exception:
+            logger.exception("Holiday calendar refresh failed")
+
     async def _collect_symbols(self, users) -> set[tuple[str, str]]:
         symbols: set[tuple[str, str]] = set()
         for user in users:
@@ -100,6 +147,99 @@ class BotScheduler:
                 if cfg.get("symbol"):
                     symbols.add((cfg["symbol"], cfg.get("market", "US")))
         return symbols
+
+    async def _symbols_for_user(self, user) -> set[tuple[str, str]]:
+        symbols: set[tuple[str, str]] = set()
+        for portfolio in await self.repo.get_portfolios(user.telegram_id):
+            for holding in await self.repo.get_holdings(portfolio.id):
+                symbols.add((holding.symbol, holding.market))
+        for item in await self.repo.get_watchlist(user.telegram_id):
+            symbols.add((item.symbol, item.market))
+        return symbols
+
+    async def _check_market_events(self) -> None:
+        if not self.events.available:
+            return
+        now = datetime.now(pytz.timezone(TIMEZONE))
+        today = now.date()
+        today_iso = today.isoformat()
+        users = [u for u in await self.repo.get_all_users() if u.onboarding_completed]
+        if not users:
+            return
+
+        symbol_users: dict[tuple[str, str], list] = defaultdict(list)
+        all_us_symbols: set[str] = set()
+        for user in users:
+            for key in await self._symbols_for_user(user):
+                symbol_users[key].append(user)
+                if key[1] == "US":
+                    all_us_symbols.add(key[0])
+
+        symbol_events: dict[tuple[str, str], list] = {}
+        for (symbol, market), _ in symbol_users.items():
+            if not is_market_open(now, market):
+                continue
+            try:
+                symbol_events[(symbol, market)] = await self.events.scan_symbol(symbol, market, today)
+            except Exception:
+                logger.exception("Market event scan failed for %s (%s)", symbol, market)
+
+        shared_events = []
+        try:
+            shared_events.extend(await self.events.scan_ipo_calendar(all_us_symbols, today))
+            shared_events.extend(await self.events.scan_index_history(all_us_symbols, today))
+        except Exception:
+            logger.exception("Shared market event scan failed")
+        shared_events.extend(self.events.scan_holiday_reminders("US", today))
+        shared_events.extend(self.events.scan_holiday_reminders("IL", today))
+
+        for user in users:
+            t = self.i18n.load(user.language)
+            user_symbols = await self._symbols_for_user(user)
+            user_us = {s for s, m in user_symbols if m == "US"}
+
+            for key in user_symbols:
+                for event in symbol_events.get(key, []):
+                    await self._send_market_event(user, event, today_iso, t)
+
+            for event in shared_events:
+                if event.event_type == EVENT_MARKET_HOLIDAY:
+                    await self._send_market_event(user, event, today_iso, t)
+                    continue
+                if event.event_type == EVENT_IPO and event.symbol in user_us:
+                    await self._send_market_event(user, event, today_iso, t)
+                    continue
+                if event.event_type == EVENT_INDEX and event.symbol in user_us:
+                    await self._send_market_event(user, event, today_iso, t)
+
+    async def _send_market_event(self, user, event, today: str, t: dict) -> None:
+        alert_key = f"evt:{event.event_key}"
+        if await self.repo.was_alert_sent_today(user.telegram_id, alert_key, today):
+            return
+
+        if is_actionable_event(event):
+            holdings = await find_active_holdings(
+                self.repo, user.telegram_id, event.symbol, event.market
+            )
+            if not holdings:
+                return
+            if event.event_type in (EVENT_SPLIT, EVENT_REVERSE_SPLIT):
+                text, keyboard = build_split_message(event, holdings, t, user.language)
+            elif event.event_type == EVENT_DIVIDEND and event.meta.get("amount") is not None:
+                if event.event_date <= today:
+                    text, keyboard = build_dividend_message(event, holdings, t, user.language)
+                else:
+                    text = self.events.format_event(event, t)
+                    keyboard = None
+            else:
+                text = self.events.format_event(event, t)
+                keyboard = None
+            await self.bot.send_message(user.telegram_id, text, reply_markup=keyboard)
+        else:
+            text = self.events.format_event(event, t)
+            await self.bot.send_message(user.telegram_id, text)
+
+        await self.repo.mark_alert_sent(user.telegram_id, alert_key, today)
 
     async def _check_report_schedule(self) -> None:
         now = datetime.now(pytz.timezone(TIMEZONE))
@@ -251,6 +391,8 @@ class BotScheduler:
                     if key in seen_symbols:
                         continue
                     seen_symbols.add(key)
+                    if not is_market_open(now, holding.market):
+                        continue
                     quote = await self.prices.get_quote(holding.symbol, holding.market)
                     if not quote:
                         continue
@@ -267,6 +409,8 @@ class BotScheduler:
 
             watchlist = await self.repo.get_watchlist(user.telegram_id)
             for item in watchlist:
+                if not is_market_open(now, item.market):
+                    continue
                 quote = await self.prices.get_quote(item.symbol, item.market)
                 if quote and abs(quote.change_pct) >= user.mover_threshold_pct:
                     alert_key = f"watch_mover:{item.symbol}:{today}"
@@ -306,6 +450,8 @@ class BotScheduler:
         threshold = float(cfg.get("threshold_pct", 5))
 
         if rule.alert_type in ("pct_daily", "premarket", "afterhours", "volume_spike") and symbol:
+            if not is_market_open(datetime.now(pytz.timezone(TIMEZONE)), market):
+                return
             quote = await self.prices.get_quote(symbol, market)
             if not quote:
                 return
@@ -354,6 +500,8 @@ class BotScheduler:
                 return
 
         if rule.alert_type == "price_target" and symbol:
+            if not is_market_open(datetime.now(pytz.timezone(TIMEZONE)), market):
+                return
             target = float(cfg.get("target_price", 0))
             direction = cfg.get("direction", "above")
             quote = await self.prices.get_quote(symbol, market)

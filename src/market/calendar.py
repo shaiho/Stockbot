@@ -4,24 +4,24 @@ from datetime import datetime, time
 
 import pytz
 
-from src.config import TIMEZONE
-
-# Saturday + Sunday (Asia/Jerusalem) — TASE and US markets are closed.
-_NON_TRADING_WEEKDAYS = frozenset({5, 6})
-
+from src.market.holidays import (
+    is_exchange_holiday,
+    is_trading_day as _holiday_trading_day,
+    is_weekend,
+)
 _US_EASTERN = pytz.timezone("US/Eastern")
 
 
 def is_trading_day(dt: datetime | None = None) -> bool:
-    tz = pytz.timezone(TIMEZONE)
-    now = dt.astimezone(tz) if dt and dt.tzinfo else datetime.now(tz)
-    return now.weekday() not in _NON_TRADING_WEEKDAYS
+    return _holiday_trading_day(dt)
 
 
 def us_market_session(dt: datetime | None = None) -> str:
     """Return US session: pre, regular, post, or closed."""
     now = dt.astimezone(_US_EASTERN) if dt and dt.tzinfo else datetime.now(_US_EASTERN)
-    if now.weekday() >= 5:
+    if is_weekend(now):
+        return "closed"
+    if is_exchange_holiday(now.date(), "US"):
         return "closed"
     clock = now.time()
     if time(4, 0) <= clock < time(9, 30):
