@@ -211,5 +211,14 @@
   "quick_alert": "🔔 התראה",
   "smart_alerts_holdings": "🔔 התראות לכל החזקות",
   "smart_alerts_created": "נוספו {count} התראות (סף {threshold}%).",
-  "alert_exists": "ההתראה כבר קיימת."
+  "alert_exists": "ההתראה כבר קיימת.",
+  "admin_loading": "⏳ מחשב סטטיסטיקות…",
+  "admin_not_configured": "⚠️ ADMIN_TELEGRAM_IDS לא מוגדר ב-.env",
+  "admin_users_label": "משתמשים",
+  "admin_portfolios_label": "תיקים",
+  "admin_trades_label": "עסקאות",
+  "admin_no_watchlist": "אין פריטים במעקב.",
+  "admin_no_holdings": "אין החזקות פעילות.",
+  "admin_no_trades": "אין עסקאות.",
+  "admin_report": "📊 <b>סטטיסטיקות מנהל</b>\n\n👥 <b>משתמשים</b>\n• סה\"כ: {total_users}\n• השלימו הרשמה: {onboarded_users}\n• עברית: {users_he} | English: {users_en}\n• חדשים (7 יום): {new_users_7d}\n• חדשים (30 יום): {new_users_30d}\n\n📁 <b>תיקים</b>\n• סה\"כ תיקים: {total_portfolios}\n• משתמשים עם תיק: {users_with_portfolio}\n\n📈 <b>פעילות</b>\n• עסקאות: {total_trades}\n• פריטי מעקב: {total_watchlist_items}\n• משתמשים עם מעקב: {users_with_watchlist}\n• התראות: {total_alerts} ({enabled_alerts} פעילות)\n\n👁 <b>מעקב — הכי פופולרי</b>\n{watchlist_top}\n\n📋 <b>תיקים — הכי מוחזק</b>\n{holdings_top}\n\n🔥 <b>הכי נסחר</b>\n{traded_top}\n\n💰 <b>נכסים כוללים (כל המשתמשים)</b>\n• ₪{total_aum_ils}\n• ${total_aum_usd} (שער ₪{fx_rate})"
 }

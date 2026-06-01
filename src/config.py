@@ -23,3 +23,16 @@ MIN_ALERT_CHECK_MINUTES = int(os.getenv("MIN_ALERT_CHECK_MINUTES", "1"))
 QUOTE_RATE_LIMIT_PER_MINUTE = int(os.getenv("QUOTE_RATE_LIMIT_PER_MINUTE", "55"))
 NEWS_CACHE_SECONDS = int(os.getenv("NEWS_CACHE_SECONDS", "3600"))
 TAX_RATE = 0.25
+
+
+def _parse_admin_ids() -> frozenset[int]:
+    raw = os.getenv("ADMIN_TELEGRAM_IDS", "")
+    ids: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.append(int(part))
+    return frozenset(ids)
+
+
+ADMIN_TELEGRAM_IDS = _parse_admin_ids()

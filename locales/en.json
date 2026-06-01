@@ -211,5 +211,14 @@
   "quick_alert": "🔔 Alert",
   "smart_alerts_holdings": "🔔 Alerts for all holdings",
   "smart_alerts_created": "Added {count} alerts ({threshold}% threshold).",
-  "alert_exists": "Alert already exists."
+  "alert_exists": "Alert already exists.",
+  "admin_loading": "⏳ Computing stats…",
+  "admin_not_configured": "⚠️ ADMIN_TELEGRAM_IDS is not set in .env",
+  "admin_users_label": "users",
+  "admin_portfolios_label": "portfolios",
+  "admin_trades_label": "trades",
+  "admin_no_watchlist": "No watchlist items.",
+  "admin_no_holdings": "No active holdings.",
+  "admin_no_trades": "No trades.",
+  "admin_report": "📊 <b>Admin stats</b>\n\n👥 <b>Users</b>\n• Total: {total_users}\n• Onboarded: {onboarded_users}\n• Hebrew: {users_he} | English: {users_en}\n• New (7d): {new_users_7d}\n• New (30d): {new_users_30d}\n\n📁 <b>Portfolios</b>\n• Total portfolios: {total_portfolios}\n• Users with portfolio: {users_with_portfolio}\n\n📈 <b>Activity</b>\n• Trades: {total_trades}\n• Watchlist items: {total_watchlist_items}\n• Users with watchlist: {users_with_watchlist}\n• Alerts: {total_alerts} ({enabled_alerts} enabled)\n\n👁 <b>Watchlist — most popular</b>\n{watchlist_top}\n\n📋 <b>Portfolios — most held</b>\n{holdings_top}\n\n🔥 <b>Most traded</b>\n{traded_top}\n\n💰 <b>Total AUM (all users)</b>\n• ₪{total_aum_ils}\n• ${total_aum_usd} (FX ₪{fx_rate})"
 }

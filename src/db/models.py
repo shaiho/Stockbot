@@ -68,6 +68,25 @@ class WatchlistItem:
 
 
 @dataclass
+class AdminDbStats:
+    total_users: int
+    onboarded_users: int
+    users_he: int
+    users_en: int
+    new_users_7d: int
+    new_users_30d: int
+    total_portfolios: int
+    users_with_portfolio: int
+    total_trades: int
+    total_watchlist_items: int
+    users_with_watchlist: int
+    total_alerts: int
+    enabled_alerts: int
+    top_watchlist: list[tuple[str, str, int]]
+    top_traded: list[tuple[str, str, int]]
+
+
+@dataclass
 class AlertRule:
     id: int
     user_id: int

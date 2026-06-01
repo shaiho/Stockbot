@@ -10,7 +10,7 @@ from aiogram.types import TelegramObject
 from typing import Any, Awaitable, Callable
 
 from src.bot.common import BotContext
-from src.bot.handlers import alerts, cash, commands, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
+from src.bot.handlers import admin, alerts, cash, commands, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
 from src.bot.i18n import i18n
 from src.bot.middleware import MenuRestoreMiddleware
 from src.config import TELEGRAM_BOT_TOKEN
@@ -54,6 +54,7 @@ async def main() -> None:
     dp.message.middleware(MenuRestoreMiddleware(ctx))
     dp.callback_query.middleware(MenuRestoreMiddleware(ctx))
 
+    dp.include_router(admin.router)
     dp.include_router(onboarding.router)
     dp.include_router(commands.router)
     dp.include_router(portfolio.router)

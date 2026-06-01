@@ -9,7 +9,7 @@ from typing import Any
 import aiosqlite
 
 from src.config import DATABASE_PATH, DATABASE_URL, MAX_PORTFOLIOS_PER_USER
-from src.db.models import AlertRule, Holding, Portfolio, Trade, User, WatchlistItem
+from src.db.models import AdminDbStats, AlertRule, Holding, Portfolio, Trade, User, WatchlistItem
 
 try:
     import asyncpg
@@ -623,8 +623,11 @@ class Repository:
             ).fetchall()
             return [self._row_to_trade(r) for r in rows]
 
-    async def get_holdings(self, portfolio_id: int) -> list[Holding]:
-        trades = await self.get_trades(portfolio_id)
+    async def get_holdings(
+        self, portfolio_id: int, trades: list[Trade] | None = None
+    ) -> list[Holding]:
+        if trades is None:
+            trades = await self.get_trades(portfolio_id)
         buckets: dict[tuple[str, str, str, str], dict] = {}
         for trade in trades:
             if trade.asset_type == "cash":
@@ -665,13 +668,16 @@ class Repository:
             )
         return holdings
 
-    async def get_cash_balances(self, portfolio_id: int) -> tuple[float, float]:
+    async def get_cash_balances(
+        self, portfolio_id: int, trades: list[Trade] | None = None
+    ) -> tuple[float, float]:
         portfolio = await self._get_portfolio_raw(portfolio_id)
         if not portfolio:
             return 0.0, 0.0
         ils = float(portfolio["opening_cash_ils"])
         usd = float(portfolio["opening_cash_usd"])
-        trades = await self.get_trades(portfolio_id)
+        if trades is None:
+            trades = await self.get_trades(portfolio_id)
         for trade in trades:
             if trade.asset_type == "cash":
                 if trade.action == "deposit":
@@ -717,6 +723,191 @@ class Repository:
             db.row_factory = aiosqlite.Row
             rows = await (await db.execute("SELECT * FROM users")).fetchall()
             return [self._row_to_user(r) for r in rows]
+
+    async def get_all_portfolios(self) -> list[Portfolio]:
+        query = "SELECT * FROM portfolios ORDER BY user_id, id"
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(query)
+                return [self._row_to_portfolio(r) for r in rows]
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            rows = await (await db.execute(query)).fetchall()
+            return [self._row_to_portfolio(r) for r in rows]
+
+    async def get_admin_db_stats(self) -> AdminDbStats:
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                return await self._fetch_admin_db_stats_postgres(conn)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            return await self._fetch_admin_db_stats_sqlite(db)
+
+    async def _fetch_admin_db_stats_postgres(self, conn: asyncpg.Connection) -> AdminDbStats:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) AS total_users,
+                COUNT(*) FILTER (WHERE onboarding_completed) AS onboarded_users,
+                COUNT(*) FILTER (WHERE language = 'he') AS users_he,
+                COUNT(*) FILTER (WHERE language = 'en') AS users_en,
+                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_7d,
+                COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+            FROM users
+            """
+        )
+        pf = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) AS total_portfolios,
+                COUNT(DISTINCT user_id) AS users_with_portfolio
+            FROM portfolios
+            """
+        )
+        tr = await conn.fetchrow("SELECT COUNT(*) AS total_trades FROM trades")
+        wl = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) AS total_watchlist_items,
+                COUNT(DISTINCT user_id) AS users_with_watchlist
+            FROM watchlist
+            """
+        )
+        al = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) AS total_alerts,
+                COUNT(*) FILTER (WHERE enabled) AS enabled_alerts
+            FROM alert_rules
+            """
+        )
+        watch_rows = await conn.fetch(
+            """
+            SELECT symbol, market, COUNT(DISTINCT user_id) AS user_count
+            FROM watchlist
+            GROUP BY symbol, market
+            ORDER BY user_count DESC, symbol
+            LIMIT 5
+            """
+        )
+        trade_rows = await conn.fetch(
+            """
+            SELECT symbol, market, COUNT(*) AS trade_count
+            FROM trades
+            WHERE asset_type != 'cash'
+            GROUP BY symbol, market
+            ORDER BY trade_count DESC, symbol
+            LIMIT 5
+            """
+        )
+        return AdminDbStats(
+            total_users=row["total_users"],
+            onboarded_users=row["onboarded_users"],
+            users_he=row["users_he"],
+            users_en=row["users_en"],
+            new_users_7d=row["new_users_7d"],
+            new_users_30d=row["new_users_30d"],
+            total_portfolios=pf["total_portfolios"],
+            users_with_portfolio=pf["users_with_portfolio"],
+            total_trades=tr["total_trades"],
+            total_watchlist_items=wl["total_watchlist_items"],
+            users_with_watchlist=wl["users_with_watchlist"],
+            total_alerts=al["total_alerts"],
+            enabled_alerts=al["enabled_alerts"],
+            top_watchlist=[(r["symbol"], r["market"], r["user_count"]) for r in watch_rows],
+            top_traded=[(r["symbol"], r["market"], r["trade_count"]) for r in trade_rows],
+        )
+
+    async def _fetch_admin_db_stats_sqlite(self, db: aiosqlite.Connection) -> AdminDbStats:
+        row = await (
+            await db.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_users,
+                    SUM(CASE WHEN onboarding_completed = 1 THEN 1 ELSE 0 END) AS onboarded_users,
+                    SUM(CASE WHEN language = 'he' THEN 1 ELSE 0 END) AS users_he,
+                    SUM(CASE WHEN language = 'en' THEN 1 ELSE 0 END) AS users_en,
+                    SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS new_users_7d,
+                    SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END) AS new_users_30d
+                FROM users
+                """
+            )
+        ).fetchone()
+        pf = await (
+            await db.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_portfolios,
+                    COUNT(DISTINCT user_id) AS users_with_portfolio
+                FROM portfolios
+                """
+            )
+        ).fetchone()
+        tr = await (await db.execute("SELECT COUNT(*) AS total_trades FROM trades")).fetchone()
+        wl = await (
+            await db.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_watchlist_items,
+                    COUNT(DISTINCT user_id) AS users_with_watchlist
+                FROM watchlist
+                """
+            )
+        ).fetchone()
+        al = await (
+            await db.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_alerts,
+                    SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabled_alerts
+                FROM alert_rules
+                """
+            )
+        ).fetchone()
+        watch_rows = await (
+            await db.execute(
+                """
+                SELECT symbol, market, COUNT(DISTINCT user_id) AS user_count
+                FROM watchlist
+                GROUP BY symbol, market
+                ORDER BY user_count DESC, symbol
+                LIMIT 5
+                """
+            )
+        ).fetchall()
+        trade_rows = await (
+            await db.execute(
+                """
+                SELECT symbol, market, COUNT(*) AS trade_count
+                FROM trades
+                WHERE asset_type != 'cash'
+                GROUP BY symbol, market
+                ORDER BY trade_count DESC, symbol
+                LIMIT 5
+                """
+            )
+        ).fetchall()
+        return AdminDbStats(
+            total_users=row["total_users"],
+            onboarded_users=row["onboarded_users"],
+            users_he=row["users_he"],
+            users_en=row["users_en"],
+            new_users_7d=row["new_users_7d"],
+            new_users_30d=row["new_users_30d"],
+            total_portfolios=pf["total_portfolios"],
+            users_with_portfolio=pf["users_with_portfolio"],
+            total_trades=tr["total_trades"],
+            total_watchlist_items=wl["total_watchlist_items"],
+            users_with_watchlist=wl["users_with_watchlist"],
+            total_alerts=al["total_alerts"],
+            enabled_alerts=al["enabled_alerts"],
+            top_watchlist=[(r["symbol"], r["market"], r["user_count"]) for r in watch_rows],
+            top_traded=[(r["symbol"], r["market"], r["trade_count"]) for r in trade_rows],
+        )
 
     async def add_watchlist_item(self, user_id: int, symbol: str, market: str) -> WatchlistItem:
         args = (user_id, symbol.upper(), market)
