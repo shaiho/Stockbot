@@ -6,12 +6,13 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import TelegramObject
+from aiogram.types import ErrorEvent, TelegramObject
 from typing import Any, Awaitable, Callable
 
 from src.bot.common import BotContext
-from src.bot.handlers import admin, alerts, cash, commands, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
+from src.bot.handlers import admin, alerts, cash, commands, fallback, menu, misc, onboarding, portfolio, portfolios, settings, trade_manage, trades
 from src.bot.i18n import i18n
+from src.bot.logging_middleware import UpdateLoggingMiddleware
 from src.bot.middleware import MenuRestoreMiddleware
 from src.config import TELEGRAM_BOT_TOKEN
 from src.db.repository import Repository
@@ -20,6 +21,7 @@ from src.portfolio.calculator import PortfolioCalculator
 from src.scheduler.jobs import BotScheduler
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -50,9 +52,14 @@ async def main() -> None:
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
+    dp.update.middleware(UpdateLoggingMiddleware())
     dp.update.middleware(ContextMiddleware(ctx))
     dp.message.middleware(MenuRestoreMiddleware(ctx))
     dp.callback_query.middleware(MenuRestoreMiddleware(ctx))
+
+    @dp.errors()
+    async def on_error(event: ErrorEvent) -> None:
+        logger.exception("Unhandled update %s", event.update.update_id, exc_info=event.exception)
 
     dp.include_router(admin.router)
     dp.include_router(onboarding.router)
@@ -66,6 +73,7 @@ async def main() -> None:
     dp.include_router(settings.router)
     dp.include_router(misc.router)
     dp.include_router(menu.router)
+    dp.include_router(fallback.router)
 
     scheduler = BotScheduler(bot, repo, prices, calculator, i18n)
     scheduler.start()

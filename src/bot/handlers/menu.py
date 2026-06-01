@@ -15,9 +15,10 @@ router = Router()
 async def cmd_menu(message: Message, state: FSMContext, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
-    if not user.onboarding_completed:
-        return
     t = ctx.i18n.load(lang)
+    if not user.onboarding_completed:
+        await message.answer(t["onboarding_in_progress"])
+        return
     await state.clear()
     data["skip_menu_restore"] = True
     await show_main_menu(message, lang, t)

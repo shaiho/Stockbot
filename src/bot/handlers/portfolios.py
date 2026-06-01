@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -19,11 +21,60 @@ from src.bot.portfolio_flow import resolve_portfolio
 from src.bot.trade_helpers import prompt_trade_date, store_trade_date, store_trade_date_today
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 async def _finish_new_portfolio(message: Message, state, ctx, user, lang: str, t: dict, portfolio_id: int) -> None:
     await state.clear()
     await _show_portfolio_manage(message, ctx, user, lang, t, portfolio_id)
+
+
+async def _save_new_portfolio_trade(
+    message: Message,
+    state,
+    ctx,
+    user,
+    lang: str,
+    t: dict,
+    *,
+    edit: bool = False,
+) -> None:
+    form = await state.get_data()
+    currency = "ILS" if form.get("market") == "IL" else "USD"
+    portfolio = await ctx.repo.get_portfolio(form["portfolio_id"], user.telegram_id)
+    commission = (
+        calc_trade_commission(portfolio, form["quantity"], form["price"], currency) if portfolio else 0.0
+    )
+    try:
+        await ctx.repo.add_trade(
+            portfolio_id=form["portfolio_id"],
+            symbol=form["symbol"],
+            market=form["market"],
+            asset_type="stock",
+            action="buy",
+            quantity=form["quantity"],
+            price=form["price"],
+            currency=currency,
+            commission=commission,
+            timestamp=form.get("trade_timestamp"),
+        )
+    except Exception:
+        logger.exception(
+            "new_portfolio add_trade failed user=%s portfolio=%s",
+            user.telegram_id,
+            form.get("portfolio_id"),
+        )
+        target = message if not edit else message
+        await target.answer(t["action_failed"])
+        return
+
+    await state.set_state(NewPortfolioStates.add_another)
+    text = t["add_another_holding"]
+    kb = yes_no_keyboard(lang)
+    if edit:
+        await message.edit_text(text, reply_markup=kb)
+    else:
+        await message.answer(text, reply_markup=kb)
 
 
 async def _create_portfolio_and_ask_holdings(
@@ -313,24 +364,7 @@ async def new_portfolio_trade_date_today(callback: CallbackQuery, state, **data)
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     await store_trade_date_today(state)
-    form = await state.get_data()
-    currency = "ILS" if form.get("market") == "IL" else "USD"
-    portfolio = await ctx.repo.get_portfolio(form["portfolio_id"], user.telegram_id)
-    commission = calc_trade_commission(portfolio, form["quantity"], form["price"], currency) if portfolio else 0.0
-    await ctx.repo.add_trade(
-        portfolio_id=form["portfolio_id"],
-        symbol=form["symbol"],
-        market=form["market"],
-        asset_type="stock",
-        action="buy",
-        quantity=form["quantity"],
-        price=form["price"],
-        currency=currency,
-        commission=commission,
-        timestamp=form.get("trade_timestamp"),
-    )
-    await state.set_state(NewPortfolioStates.add_another)
-    await callback.message.edit_text(t["add_another_holding"], reply_markup=yes_no_keyboard(lang))
+    await _save_new_portfolio_trade(callback.message, state, ctx, user, lang, t, edit=True)
     await callback.answer()
 
 
@@ -348,24 +382,7 @@ async def new_portfolio_trade_date(message: Message, state, **data) -> None:
             await message.answer(t["invalid_date"])
         return
 
-    form = await state.get_data()
-    currency = "ILS" if form.get("market") == "IL" else "USD"
-    portfolio = await ctx.repo.get_portfolio(form["portfolio_id"], user.telegram_id)
-    commission = calc_trade_commission(portfolio, form["quantity"], form["price"], currency) if portfolio else 0.0
-    await ctx.repo.add_trade(
-        portfolio_id=form["portfolio_id"],
-        symbol=form["symbol"],
-        market=form["market"],
-        asset_type="stock",
-        action="buy",
-        quantity=form["quantity"],
-        price=form["price"],
-        currency=currency,
-        commission=commission,
-        timestamp=form.get("trade_timestamp"),
-    )
-    await state.set_state(NewPortfolioStates.add_another)
-    await message.answer(t["add_another_holding"], reply_markup=yes_no_keyboard(lang))
+    await _save_new_portfolio_trade(message, state, ctx, user, lang, t)
 
 
 @router.callback_query(NewPortfolioStates.add_another, F.data.in_({"yes", "no"}))
