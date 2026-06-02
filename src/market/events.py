@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import finnhub.exceptions
 import pytz
 
 from src.config import TIMEZONE
@@ -51,14 +52,32 @@ class MarketEvent:
 class MarketEventsProvider:
     def __init__(self, prices: PriceProvider) -> None:
         self._prices = prices
+        self._finnhub_denied: set[str] = set()
 
     @property
     def available(self) -> bool:
         return self._prices._finnhub is not None
 
     async def _call(self, fn, *args, **kwargs):
+        name = getattr(fn, "__name__", "finnhub")
+        if name in self._finnhub_denied:
+            return None
         await self._prices._rate_limiter.acquire()
-        return await asyncio.to_thread(fn, *args, **kwargs)
+        try:
+            return await asyncio.to_thread(fn, *args, **kwargs)
+        except finnhub.exceptions.FinnhubAPIException as exc:
+            if exc.status_code == 403:
+                self._finnhub_denied.add(name)
+                logger.warning(
+                    "Finnhub denied %s (403) — not available on current plan; skipping",
+                    name,
+                )
+                return None
+            logger.warning("Finnhub %s failed: %s", name, exc)
+            return None
+        except Exception:
+            logger.exception("Finnhub %s failed", name)
+            return None
 
     async def scan_symbol(self, symbol: str, market: str, today: date) -> list[MarketEvent]:
         if market != "US" or not self.available:
@@ -108,11 +127,7 @@ class MarketEventsProvider:
         assert client is not None
         start = (today - timedelta(days=LOOKBACK_DAYS)).isoformat()
         end = (today + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
-        try:
-            rows = await self._call(client.stock_splits, symbol, _from=start, to=end)
-        except Exception:
-            logger.exception("stock_splits failed for %s", symbol)
-            return []
+        rows = await self._call(client.stock_splits, symbol, _from=start, to=end)
         events: list[MarketEvent] = []
         for row in rows or []:
             event_date = str(row.get("date", today.isoformat()))[:10]
@@ -146,11 +161,7 @@ class MarketEventsProvider:
         assert client is not None
         start = (today - timedelta(days=1)).isoformat()
         end = (today + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
-        try:
-            rows = await self._call(client.stock_dividends, symbol, _from=start, to=end)
-        except Exception:
-            logger.exception("stock_dividends failed for %s", symbol)
-            return []
+        rows = await self._call(client.stock_dividends, symbol, _from=start, to=end)
         events: list[MarketEvent] = []
         for row in rows or []:
             ex_date = str(row.get("exDate") or row.get("date") or "")[:10]
@@ -183,72 +194,66 @@ class MarketEventsProvider:
         events: list[MarketEvent] = []
         start = today.isoformat()
         end = (today + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
-        try:
-            cal = await self._call(
-                client.earnings_calendar,
-                _from=start,
-                to=end,
-                symbol=symbol,
-                international=False,
+        cal = await self._call(
+            client.earnings_calendar,
+            _from=start,
+            to=end,
+            symbol=symbol,
+            international=False,
+        )
+        for row in (cal or {}).get("earningsCalendar", []) or []:
+            event_date = str(row.get("date", ""))[:10]
+            hour = row.get("hour") or ""
+            eps_est = row.get("epsEstimate")
+            body = f"Earnings {event_date}"
+            if hour:
+                body += f" ({hour})"
+            if eps_est is not None:
+                body += f", est EPS {eps_est}"
+            events.append(
+                MarketEvent(
+                    event_type=EVENT_EARNINGS,
+                    symbol=symbol,
+                    market=market,
+                    event_key=f"earn:{symbol}:{event_date}:{hour}",
+                    title=f"Earnings {event_date}",
+                    body=body,
+                    event_date=event_date,
+                    meta={"hour": hour, "eps_estimate": eps_est},
+                )
             )
-            for row in cal.get("earningsCalendar", []) or []:
-                event_date = str(row.get("date", ""))[:10]
-                hour = row.get("hour") or ""
-                eps_est = row.get("epsEstimate")
-                body = f"Earnings {event_date}"
-                if hour:
-                    body += f" ({hour})"
-                if eps_est is not None:
-                    body += f", est EPS {eps_est}"
-                events.append(
-                    MarketEvent(
-                        event_type=EVENT_EARNINGS,
-                        symbol=symbol,
-                        market=market,
-                        event_key=f"earn:{symbol}:{event_date}:{hour}",
-                        title=f"Earnings {event_date}",
-                        body=body,
-                        event_date=event_date,
-                        meta={"hour": hour, "eps_estimate": eps_est},
-                    )
-                )
-        except Exception:
-            logger.exception("earnings_calendar failed for %s", symbol)
 
-        try:
-            surprises = await self._call(client.company_earnings, symbol, limit=1)
-            for row in surprises or []:
-                period = str(row.get("period", ""))[:10]
-                if not period:
-                    continue
-                try:
-                    period_date = datetime.strptime(period, "%Y-%m-%d").date()
-                except ValueError:
-                    continue
-                if (today - period_date).days > 45:
-                    continue
-                actual = row.get("actual")
-                estimate = row.get("estimate")
-                surprise_pct = row.get("surprisePercent")
-                if actual is None or estimate is None:
-                    continue
-                body = f"EPS actual {actual} vs est {estimate}"
-                if surprise_pct is not None:
-                    body += f" ({float(surprise_pct):+.1f}%)"
-                events.append(
-                    MarketEvent(
-                        event_type=EVENT_EARNINGS_SURPRISE,
-                        symbol=symbol,
-                        market=market,
-                        event_key=f"surprise:{symbol}:{period}:{actual}:{estimate}",
-                        title=f"Earnings surprise {period}",
-                        body=body,
-                        event_date=today.isoformat(),
-                        meta={"actual": actual, "estimate": estimate, "surprise_pct": surprise_pct},
-                    )
+        surprises = await self._call(client.company_earnings, symbol, limit=1)
+        for row in surprises or []:
+            period = str(row.get("period", ""))[:10]
+            if not period:
+                continue
+            try:
+                period_date = datetime.strptime(period, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if (today - period_date).days > 45:
+                continue
+            actual = row.get("actual")
+            estimate = row.get("estimate")
+            surprise_pct = row.get("surprisePercent")
+            if actual is None or estimate is None:
+                continue
+            body = f"EPS actual {actual} vs est {estimate}"
+            if surprise_pct is not None:
+                body += f" ({float(surprise_pct):+.1f}%)"
+            events.append(
+                MarketEvent(
+                    event_type=EVENT_EARNINGS_SURPRISE,
+                    symbol=symbol,
+                    market=market,
+                    event_key=f"surprise:{symbol}:{period}:{actual}:{estimate}",
+                    title=f"Earnings surprise {period}",
+                    body=body,
+                    event_date=today.isoformat(),
+                    meta={"actual": actual, "estimate": estimate, "surprise_pct": surprise_pct},
                 )
-        except Exception:
-            logger.exception("company_earnings failed for %s", symbol)
+            )
         return events
 
     async def _scan_analyst(self, symbol: str, market: str, today: date) -> list[MarketEvent]:
@@ -257,11 +262,7 @@ class MarketEventsProvider:
         start = (today - timedelta(days=LOOKBACK_DAYS)).isoformat()
         end = today.isoformat()
         events: list[MarketEvent] = []
-        try:
-            rows = await self._call(client.upgrade_downgrade, symbol=symbol, _from=start, to=end)
-        except Exception:
-            logger.exception("upgrade_downgrade failed for %s", symbol)
-            return []
+        rows = await self._call(client.upgrade_downgrade, symbol=symbol, _from=start, to=end)
         for row in rows or []:
             action = row.get("action") or row.get("grade") or "update"
             firm = row.get("company") or row.get("firm") or ""
@@ -313,10 +314,8 @@ class MarketEventsProvider:
         assert client is not None
         start = today.isoformat()
         end = (today + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
-        try:
-            cal = await self._call(client.ipo_calendar, _from=start, to=end)
-        except Exception:
-            logger.exception("ipo_calendar failed")
+        cal = await self._call(client.ipo_calendar, _from=start, to=end)
+        if not cal:
             return []
         events: list[MarketEvent] = []
         for row in cal.get("ipoCalendar", []) or []:
@@ -350,10 +349,8 @@ class MarketEventsProvider:
         start = (today - timedelta(days=LOOKBACK_DAYS)).isoformat()
         end = today.isoformat()
         events: list[MarketEvent] = []
-        try:
-            data = await self._call(client.indices_hist_const, symbol="^GSPC", _from=start, to=end)
-        except Exception:
-            logger.exception("indices_hist_const failed")
+        data = await self._call(client.indices_hist_const, symbol="^GSPC", _from=start, to=end)
+        if not data:
             return []
         for row in data.get("data", []) or []:
             action = str(row.get("action") or "").lower()
