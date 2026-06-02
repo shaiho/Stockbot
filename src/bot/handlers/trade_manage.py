@@ -50,14 +50,25 @@ def _field_label(field: str, t: dict) -> str:
     return labels.get(field, field)
 
 
-def _edit_prompts(t: dict) -> dict[str, str]:
+def _edit_prompt(field: str, trade, t: dict) -> str:
+    if field == "price":
+        if trade.action == "sell":
+            return t["trade_sell_price_prompt"]
+        if trade.action == "buy":
+            return t["trade_buy_price_prompt"]
+        if trade.action == "dividend":
+            return t["dividend_amount_prompt"]
+        if trade.action == "deposit":
+            return t["deposit_amount_prompt"]
+        if trade.action == "withdraw":
+            return t["withdraw_amount_prompt"]
+        return f"{t['price']}:"
     return {
         "quantity": t["quantity_prompt"],
-        "price": t["price_prompt"],
         "commission": t["commission_prompt"],
         "date": t["trade_date_prompt"],
         "note": t["trade_note_prompt"],
-    }
+    }[field]
 
 
 async def _apply_trade_edit(
@@ -165,7 +176,6 @@ async def trade_edit_field(callback: CallbackQuery, state, **data) -> None:
     if not trade:
         await callback.answer(t["trade_not_found"], show_alert=True)
         return
-    prompts = _edit_prompts(t)
     await state.update_data(trade_id=trade_id, edit_field=field)
     await state.set_state(EditTradeStates.value)
     reply_markup = None
@@ -175,7 +185,7 @@ async def trade_edit_field(callback: CallbackQuery, state, **data) -> None:
         reply_markup = trade_date_keyboard(lang)
     elif field == "commission":
         reply_markup = trade_commission_keyboard(lang)
-    await callback.message.edit_text(prompts[field], reply_markup=reply_markup)
+    await callback.message.edit_text(_edit_prompt(field, trade, t), reply_markup=reply_markup)
     await callback.answer()
 
 

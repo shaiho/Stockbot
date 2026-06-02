@@ -7,15 +7,39 @@ from src.bot.common import MENU_TRADE, get_user_lang
 from src.bot.keyboards import trade_action_keyboard
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
 from src.bot.states import TradeStates
+from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
 from src.bot.trade_helpers import (
     prompt_trade_date,
     prompt_trade_note,
     store_trade_date,
     store_trade_date_today,
 )
+from src.market.symbols import normalize_symbol
 from src.portfolio.commission import calc_trade_commission
 
 router = Router()
+
+
+async def _prompt_after_market(message: Message, state, t: dict, *, action: str) -> None:
+    if action == "dividend":
+        await state.set_state(TradeStates.price)
+        await message.answer(t["dividend_amount_prompt"])
+    else:
+        await state.set_state(TradeStates.quantity)
+        await message.answer(t["quantity_prompt"])
+
+
+async def _apply_resolved_symbol(
+    message: Message,
+    state,
+    t: dict,
+    *,
+    symbol: str,
+    market: str,
+) -> None:
+    form = await state.get_data()
+    await state.update_data(symbol=symbol, market=market)
+    await _prompt_after_market(message, state, t, action=form.get("action", "buy"))
 
 
 async def _save_trade(
@@ -126,12 +150,34 @@ async def trade_symbol(message: Message, state, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
-    symbol = (message.text or "").strip().upper()
-    await state.update_data(symbol=symbol)
-    await state.set_state(TradeStates.market)
-    from src.bot.keyboards import market_keyboard
+    raw = (message.text or "").strip()
+    if not raw:
+        await message.answer(t["enter_symbol"])
+        return
 
-    await message.answer(t["choose_market"], reply_markup=market_keyboard(lang))
+    form = await state.get_data()
+    holding_markets: list[str] | None = None
+    if form.get("action") == "sell" and form.get("portfolio_id"):
+        holdings = await ctx.repo.get_holdings(form["portfolio_id"])
+        symbol_key = normalize_symbol(raw)
+        holding_markets = [
+            h.market for h in holdings if h.symbol.upper() == symbol_key
+        ]
+
+    outcome = await resolve_symbol_message(
+        message, ctx, raw, holding_markets=holding_markets
+    )
+    if outcome.kind == "resolved":
+        await _apply_resolved_symbol(
+            message, state, t, symbol=outcome.symbol, market=outcome.market
+        )
+        return
+    if outcome.kind == "ambiguous":
+        await prompt_ambiguous_symbol(
+            message, state, TradeStates.market, outcome.symbol, t, lang
+        )
+        return
+    await message.answer(t["symbol_not_found"])
 
 
 @router.callback_query(TradeStates.market, F.data.startswith("market:"))
@@ -140,14 +186,14 @@ async def trade_market(callback: CallbackQuery, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     market = callback.data.split(":")[1]
-    await state.update_data(market=market)
     form = await state.get_data()
-    if form.get("action") == "dividend":
-        await state.set_state(TradeStates.price)
-        await callback.message.edit_text(t["dividend_amount_prompt"])
-    else:
-        await state.set_state(TradeStates.quantity)
-        await callback.message.edit_text(t["quantity_prompt"])
+    symbol = form.get("symbol", "")
+    quote = await ctx.prices.get_quote(symbol, market)
+    if not quote:
+        await callback.answer(t["symbol_not_found"], show_alert=True)
+        return
+    await state.update_data(market=market)
+    await _prompt_after_market(callback.message, state, t, action=form.get("action", "buy"))
     await callback.answer()
 
 

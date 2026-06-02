@@ -75,6 +75,8 @@
   "deposit_amount_prompt": "הזן סכום להפקדה:",
   "cash_deposited": "המזומן נוסף לתיק: {amount}",
   "enter_symbol": "הזן סימבול:",
+  "symbol_not_found": "לא מצאתי נייר עם הסימבול הזה. בדוק איות ונסה שוב.",
+  "symbol_ambiguous_market": "הסימבול קיים בשני שווקים — בחר שוק:",
   "choose_year": "בחר שנת מס:",
   "watchlist_empty": "רשימת המעקב ריקה.",
   "watchlist_added": "נוסף למעקב.",

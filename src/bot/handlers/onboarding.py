@@ -8,13 +8,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.common import get_user_lang, show_main_menu
+from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
 from src.bot.trade_helpers import prompt_trade_date, store_trade_date, store_trade_date_today
 from src.portfolio.commission import calc_trade_commission
 from src.bot.keyboards import (
     currency_keyboard,
     holdings_now_keyboard,
     language_keyboard,
-    market_keyboard,
     yes_no_keyboard,
     zero_or_custom_keyboard,
 )
@@ -318,13 +318,23 @@ async def onboarding_symbol(message: Message, state: FSMContext, **data) -> None
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
-    symbol = (message.text or "").strip().upper()
-    if not symbol:
+    raw = (message.text or "").strip()
+    if not raw:
         await message.answer(t["add_holding_prompt"])
         return
-    await state.update_data(symbol=symbol)
-    await state.set_state(OnboardingStates.market)
-    await message.answer(t["choose_market"], reply_markup=market_keyboard(lang))
+
+    outcome = await resolve_symbol_message(message, ctx, raw)
+    if outcome.kind == "resolved":
+        await state.update_data(symbol=outcome.symbol, market=outcome.market)
+        await state.set_state(OnboardingStates.quantity)
+        await message.answer(t["quantity_prompt"])
+        return
+    if outcome.kind == "ambiguous":
+        await prompt_ambiguous_symbol(
+            message, state, OnboardingStates.market, outcome.symbol, t, lang
+        )
+        return
+    await message.answer(t["symbol_not_found"])
 
 
 @router.callback_query(OnboardingStates.market, F.data.startswith("market:"))
@@ -333,6 +343,11 @@ async def onboarding_market(callback: CallbackQuery, state: FSMContext, **data) 
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     market = callback.data.split(":")[1]
+    form = await state.get_data()
+    quote = await ctx.prices.get_quote(form.get("symbol", ""), market)
+    if not quote:
+        await callback.answer(t["symbol_not_found"], show_alert=True)
+        return
     await state.update_data(market=market)
     await state.set_state(OnboardingStates.quantity)
     await callback.message.edit_text(t["quantity_prompt"])

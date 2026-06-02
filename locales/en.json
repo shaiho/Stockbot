@@ -75,6 +75,8 @@
   "deposit_amount_prompt": "Enter deposit amount:",
   "cash_deposited": "Cash added to portfolio: {amount}",
   "enter_symbol": "Enter symbol:",
+  "symbol_not_found": "No instrument found for that symbol. Check spelling and try again.",
+  "symbol_ambiguous_market": "This symbol exists on both markets — choose one:",
   "choose_year": "Choose tax year:",
   "watchlist_empty": "Watchlist is empty.",
   "watchlist_added": "Added to watchlist.",

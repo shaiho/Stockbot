@@ -22,6 +22,7 @@ from src.bot.keyboards import (
 )
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
 from src.bot.states import HistoryStates, MonthlyStates, PnlStates, QuoteStates, TaxStates, TradeStates
+from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
 from src.portfolio.allocation import compute_allocation
 from src.portfolio.benchmark import compute_benchmark_comparison
 from src.portfolio.formatter import (
@@ -402,12 +403,27 @@ async def quote_symbol(message: Message, state, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
-    symbol = (message.text or "").strip().upper()
-    await state.update_data(symbol=symbol)
-    await state.set_state(QuoteStates.market)
-    from src.bot.keyboards import market_keyboard
+    raw = (message.text or "").strip()
+    if not raw:
+        await message.answer(t["enter_symbol"])
+        return
 
-    await message.answer(t["choose_market"], reply_markup=market_keyboard(lang))
+    outcome = await resolve_symbol_message(message, ctx, raw)
+    if outcome.kind == "not_found":
+        await message.answer(t["symbol_not_found"])
+        return
+    if outcome.kind == "ambiguous":
+        await prompt_ambiguous_symbol(
+            message, state, QuoteStates.market, outcome.symbol, t, lang
+        )
+        return
+
+    quote = await ctx.prices.get_quote(outcome.symbol, outcome.market)
+    await state.clear()
+    if not quote:
+        await message.answer(t["price_unavailable"])
+    else:
+        await message.answer(format_quote(quote, t))
 
 
 @router.callback_query(QuoteStates.market, F.data.startswith("market:"))
@@ -420,9 +436,9 @@ async def quote_market(callback: CallbackQuery, state, **data) -> None:
     quote = await ctx.prices.get_quote(form["symbol"], market)
     await state.clear()
     if not quote:
-        await callback.message.edit_text(t["price_unavailable"])
-    else:
-        await callback.message.edit_text(format_quote(quote, t))
+        await callback.answer(t["symbol_not_found"], show_alert=True)
+        return
+    await callback.message.edit_text(format_quote(quote, t))
     await callback.answer()
 
 

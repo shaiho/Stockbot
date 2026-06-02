@@ -12,6 +12,7 @@ from src.bot.keyboards import (
 )
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
 from src.bot.states import AlertStates
+from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
 
 router = Router()
 
@@ -224,16 +225,31 @@ async def alert_symbol_text(message: Message, state, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
-    symbol = (message.text or "").strip().upper()
-    await state.update_data(symbol=symbol)
-    form = await state.get_data()
-    if form.get("scope") == "stock" and form.get("alert_type") != "news":
-        await state.set_state(AlertStates.market)
-        await message.answer(t["choose_market"], reply_markup=market_keyboard(lang))
+    raw = (message.text or "").strip()
+    if not raw:
+        await message.answer(t["enter_symbol"])
         return
-    await state.update_data(market="US")
+
     form = await state.get_data()
-    await _continue_after_symbol(message, state, ctx, user, form, t, lang)
+    if form.get("scope") != "stock":
+        symbol = raw.upper()
+        await state.update_data(symbol=symbol, market="US")
+        form = await state.get_data()
+        await _continue_after_symbol(message, state, ctx, user, form, t, lang)
+        return
+
+    outcome = await resolve_symbol_message(message, ctx, raw)
+    if outcome.kind == "resolved":
+        await state.update_data(symbol=outcome.symbol, market=outcome.market)
+        form = await state.get_data()
+        await _continue_after_symbol(message, state, ctx, user, form, t, lang)
+        return
+    if outcome.kind == "ambiguous":
+        await prompt_ambiguous_symbol(
+            message, state, AlertStates.market, outcome.symbol, t, lang
+        )
+        return
+    await message.answer(t["symbol_not_found"])
 
 
 @router.callback_query(AlertStates.market, F.data.startswith("market:"))
@@ -242,6 +258,11 @@ async def alert_market(callback: CallbackQuery, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     market = callback.data.split(":")[1]
+    form = await state.get_data()
+    quote = await ctx.prices.get_quote(form.get("symbol", ""), market)
+    if not quote:
+        await callback.answer(t["symbol_not_found"], show_alert=True)
+        return
     await state.update_data(market=market)
     form = await state.get_data()
     await _continue_after_symbol(callback.message, state, ctx, user, form, t, lang)
