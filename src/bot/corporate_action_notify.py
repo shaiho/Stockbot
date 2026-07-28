@@ -8,7 +8,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from src.db.models import Holding, Portfolio
 from src.db.repository import Repository
 from src.market.events import EVENT_DIVIDEND, EVENT_REVERSE_SPLIT, EVENT_SPLIT, MarketEvent
-from src.market.splits import SPLIT_LOOKBACK_DAYS, fetch_yfinance_splits, split_already_applied
+from src.market.splits import (
+    SPLIT_LOOKBACK_DAYS,
+    fetch_yfinance_splits,
+    split_alert_key,
+    split_already_applied,
+    split_event_key,
+)
 from src.portfolio.corporate_actions import format_split_label
 
 
@@ -130,7 +136,7 @@ def _split_event_from_row(symbol: str, market: str, row: dict) -> MarketEvent:
         event_type=event_type,
         symbol=symbol.upper(),
         market=market,
-        event_key=f"{event_type}:{symbol.upper()}:{event_date}:{from_factor}:{to_factor}",
+        event_key=split_event_key(symbol, event_date, from_factor, to_factor),
         title=label,
         body=label,
         event_date=event_date,
@@ -142,6 +148,8 @@ async def find_pending_split_events(
     repo: Repository,
     portfolio: Portfolio,
     today: date,
+    *,
+    user_id: int | None = None,
 ) -> list[tuple[MarketEvent, Holding]]:
     pending: list[tuple[MarketEvent, Holding]] = []
     start = today - timedelta(days=SPLIT_LOOKBACK_DAYS)
@@ -162,6 +170,10 @@ async def find_pending_split_events(
             to_f = float(event.meta.get("to_factor", 1))
             if await split_already_applied(repo, portfolio.id, holding.symbol, from_f, to_f):
                 continue
+            if user_id is not None and await repo.was_alert_recorded(
+                user_id, split_alert_key(holding.symbol, event.event_date, from_f, to_f)
+            ):
+                continue
             pending.append((event, holding))
     return pending
 
@@ -173,7 +185,11 @@ async def send_pending_split_prompts(
     t: dict,
     lang: str,
     today: date,
+    *,
+    user_id: int,
 ) -> None:
-    for event, holding in await find_pending_split_events(repo, portfolio, today):
+    for event, holding in await find_pending_split_events(
+        repo, portfolio, today, user_id=user_id
+    ):
         text, keyboard = build_split_message(event, [(portfolio, holding)], t, lang)
         await message.answer(text, reply_markup=keyboard)

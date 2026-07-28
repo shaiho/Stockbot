@@ -39,6 +39,26 @@ def split_label(from_factor: float, to_factor: float) -> str:
     return f"{from_factor:g}:{to_factor:g}"
 
 
+def split_event_key(
+    symbol: str,
+    event_date: str,
+    from_factor: float,
+    to_factor: float,
+) -> str:
+    ratio = to_factor / from_factor if from_factor else 1.0
+    event_type = "reverse_split" if ratio < 1 else "split"
+    return f"{event_type}:{symbol.upper()}:{event_date}:{from_factor:g}:{to_factor:g}"
+
+
+def split_alert_key(
+    symbol: str,
+    event_date: str,
+    from_factor: float,
+    to_factor: float,
+) -> str:
+    return f"evt:{split_event_key(symbol, event_date, from_factor, to_factor)}"
+
+
 def split_note_markers(from_factor: float, to_factor: float) -> tuple[str, ...]:
     current = split_label(from_factor, to_factor)
     markers = (f"split {current}",)

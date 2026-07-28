@@ -192,7 +192,9 @@ async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
             await message.answer(part, parse_mode=HTML)
 
     today = datetime.now().date()
-    await send_pending_split_prompts(message, ctx.repo, portfolio, t, lang, today)
+    await send_pending_split_prompts(
+        message, ctx.repo, portfolio, t, lang, today, user_id=user.telegram_id
+    )
 
 
 async def _send_monthly_report(message, ctx, user, lang, t, portfolio_id: int) -> None:
@@ -314,7 +316,7 @@ async def _send_holdings(message, ctx, user, lang, t, portfolio_id):
     from datetime import datetime
 
     await send_pending_split_prompts(
-        message, ctx.repo, portfolio, t, lang, datetime.now().date()
+        message, ctx.repo, portfolio, t, lang, datetime.now().date(), user_id=user.telegram_id
     )
 
 

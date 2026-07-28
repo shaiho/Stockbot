@@ -7,7 +7,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
 from src.bot.common import get_user_lang
-from src.market.splits import split_already_applied
+from src.market.splits import split_alert_key, split_already_applied
 from src.portfolio.corporate_actions import apply_stock_split, format_split_label
 
 router = Router()
@@ -135,10 +135,11 @@ async def skip_corporate_action(callback: CallbackQuery, **data) -> None:
         parts = payload.split(":")
         if len(parts) == 5:
             _, symbol, event_date, from_s, to_s = parts
-            alert_key = f"evt:split:{symbol}:{event_date}:{from_s}:{to_s}"
-            await ctx.repo.mark_alert_sent(user.telegram_id, alert_key, today)
-            reverse_key = f"evt:reverse_split:{symbol}:{event_date}:{from_s}:{to_s}"
-            await ctx.repo.mark_alert_sent(user.telegram_id, reverse_key, today)
+            await ctx.repo.mark_alert_sent(
+                user.telegram_id,
+                split_alert_key(symbol, event_date, float(from_s), float(to_s)),
+                today,
+            )
     elif payload.startswith("div:"):
         parts = payload.split(":")
         if len(parts) == 4:

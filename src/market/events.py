@@ -12,7 +12,7 @@ import pytz
 from src.config import TIMEZONE
 from src.market.event_classifier import classify_headline
 from src.market.holidays import upcoming_holidays
-from src.market.splits import SPLIT_LOOKBACK_DAYS, fetch_yfinance_splits
+from src.market.splits import SPLIT_LOOKBACK_DAYS, fetch_yfinance_splits, split_event_key
 from src.market.prices import PriceProvider
 
 logger = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ class MarketEventsProvider:
                     event_type=event_type,
                     symbol=symbol,
                     market=market,
-                    event_key=f"{event_type}:{symbol}:{event_date}:{from_factor}:{to_factor}",
+                    event_key=split_event_key(symbol, event_date, from_factor, to_factor),
                     title=label,
                     body=label,
                     event_date=event_date,
