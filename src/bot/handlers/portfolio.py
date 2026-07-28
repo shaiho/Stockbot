@@ -311,6 +311,12 @@ async def _send_holdings(message, ctx, user, lang, t, portfolio_id):
     kb = holdings_shortcuts_keyboard(portfolio_id, summary.holdings, t) if summary.holdings else None
     await message.answer(format_holdings(summary, portfolio.name, t), reply_markup=kb, parse_mode=HTML)
 
+    from datetime import datetime
+
+    await send_pending_split_prompts(
+        message, ctx.repo, portfolio, t, lang, datetime.now().date()
+    )
+
 
 @router.callback_query(F.data.startswith("hold:pnl:"))
 async def hold_pnl(callback: CallbackQuery, **data) -> None:

@@ -34,9 +34,20 @@ def ratio_to_factors(ratio: float) -> tuple[float, float]:
 
 def split_label(from_factor: float, to_factor: float) -> str:
     ratio = to_factor / from_factor if from_factor else 1.0
-    if ratio >= 1:
-        return f"{from_factor:g}:{to_factor:g}"
-    return f"{to_factor:g}:{from_factor:g} reverse"
+    if ratio < 1:
+        return f"{from_factor:g}:{to_factor:g} reverse"
+    return f"{from_factor:g}:{to_factor:g}"
+
+
+def split_note_markers(from_factor: float, to_factor: float) -> tuple[str, ...]:
+    current = split_label(from_factor, to_factor)
+    markers = (f"split {current}",)
+    ratio = to_factor / from_factor if from_factor else 1.0
+    if ratio < 1:
+        legacy = f"split {to_factor:g}:{from_factor:g} reverse"
+        if legacy not in markers:
+            return (f"split {current}", legacy)
+    return markers
 
 
 def fetch_yfinance_splits(
@@ -79,7 +90,8 @@ async def split_already_applied(
     from_factor: float,
     to_factor: float,
 ) -> bool:
-    label = split_label(from_factor, to_factor)
     trades = await repo.get_trades_for_symbol(portfolio_id, symbol.upper())
-    marker = f"split {label}"
-    return any(trade.note and marker in trade.note for trade in trades)
+    markers = split_note_markers(from_factor, to_factor)
+    return any(
+        trade.note and any(marker in trade.note for marker in markers) for trade in trades
+    )

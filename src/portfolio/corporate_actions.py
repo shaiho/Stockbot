@@ -4,6 +4,7 @@ import logging
 
 from src.db.models import Holding, Portfolio
 from src.db.repository import Repository
+from src.market.splits import split_label
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +16,7 @@ def split_ratio(from_factor: float, to_factor: float) -> float:
 
 
 def format_split_label(from_factor: float, to_factor: float) -> str:
-    ratio = split_ratio(from_factor, to_factor)
-    if ratio >= 1:
-        return f"{from_factor:g}:{to_factor:g}"
-    return f"{to_factor:g}:{from_factor:g} reverse"
+    return split_label(from_factor, to_factor)
 
 
 async def find_active_holdings(
