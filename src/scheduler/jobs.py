@@ -37,6 +37,7 @@ from src.market.events import (
 )
 from src.market.holidays import is_market_open, refresh_holiday_calendars
 from src.portfolio.corporate_actions import find_active_holdings
+from src.market.splits import split_already_applied
 from src.market.prices import PriceProvider
 from src.portfolio.calculator import PortfolioCalculator
 from src.portfolio.formatter import HTML, format_daily_report, format_monthly_report
@@ -214,7 +215,7 @@ class BotScheduler:
 
     async def _send_market_event(self, user, event, today: str, t: dict) -> None:
         alert_key = f"evt:{event.event_key}"
-        if await self.repo.was_alert_sent_today(user.telegram_id, alert_key, today):
+        if await self.repo.was_alert_recorded(user.telegram_id, alert_key):
             return
 
         if is_actionable_event(event):
@@ -224,7 +225,17 @@ class BotScheduler:
             if not holdings:
                 return
             if event.event_type in (EVENT_SPLIT, EVENT_REVERSE_SPLIT):
-                text, keyboard = build_split_message(event, holdings, t, user.language)
+                from_f = float(event.meta.get("from_factor", 1))
+                to_f = float(event.meta.get("to_factor", 1))
+                pending = []
+                for portfolio, holding in holdings:
+                    if not await split_already_applied(
+                        self.repo, portfolio.id, event.symbol, from_f, to_f
+                    ):
+                        pending.append((portfolio, holding))
+                if not pending:
+                    return
+                text, keyboard = build_split_message(event, pending, t, user.language)
             elif event.event_type == EVENT_DIVIDEND and event.meta.get("amount") is not None:
                 if event.event_date <= today:
                     text, keyboard = build_dividend_message(event, holdings, t, user.language)

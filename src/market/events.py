@@ -11,7 +11,8 @@ import pytz
 
 from src.config import TIMEZONE
 from src.market.event_classifier import classify_headline
-from src.market.holidays import is_exchange_holiday, upcoming_holidays
+from src.market.holidays import upcoming_holidays
+from src.market.splits import SPLIT_LOOKBACK_DAYS, fetch_yfinance_splits
 from src.market.prices import PriceProvider
 
 logger = logging.getLogger(__name__)
@@ -80,11 +81,12 @@ class MarketEventsProvider:
             return None
 
     async def scan_symbol(self, symbol: str, market: str, today: date) -> list[MarketEvent]:
-        if market != "US" or not self.available:
-            return await self._scan_il_symbol(symbol, today)
         events: list[MarketEvent] = []
         sym = symbol.upper()
         events.extend(await self._scan_splits(sym, market, today))
+        if market != "US" or not self.available:
+            events.extend(await self._scan_il_symbol(sym, today))
+            return events
         events.extend(await self._scan_dividends(sym, market, today))
         events.extend(await self._scan_earnings(sym, market, today))
         events.extend(await self._scan_analyst(sym, market, today))
@@ -123,19 +125,44 @@ class MarketEventsProvider:
         return events
 
     async def _scan_splits(self, symbol: str, market: str, today: date) -> list[MarketEvent]:
-        client = self._prices._finnhub
-        assert client is not None
-        start = (today - timedelta(days=LOOKBACK_DAYS)).isoformat()
-        end = (today + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
-        rows = await self._call(client.stock_splits, symbol, _from=start, to=end)
+        start = today - timedelta(days=SPLIT_LOOKBACK_DAYS)
+        end = today + timedelta(days=LOOKAHEAD_DAYS)
+        rows = await asyncio.to_thread(fetch_yfinance_splits, symbol, market, start, end)
+
+        if market == "US" and self.available and "stock_splits" not in self._finnhub_denied:
+            finnhub_rows = await self._call(
+                self._prices._finnhub.stock_splits,
+                symbol,
+                _from=start.isoformat(),
+                to=end.isoformat(),
+            )
+            seen = {f"{r['date']}:{r['fromFactor']}:{r['toFactor']}" for r in rows}
+            for row in finnhub_rows or []:
+                event_date = str(row.get("date", ""))[:10]
+                from_factor = float(row.get("fromFactor") or 1)
+                to_factor = float(row.get("toFactor") or 1)
+                key = f"{event_date}:{from_factor}:{to_factor}"
+                if key not in seen:
+                    rows.append(
+                        {
+                            "date": event_date,
+                            "fromFactor": from_factor,
+                            "toFactor": to_factor,
+                        }
+                    )
+                    seen.add(key)
+            rows.sort(key=lambda r: r["date"])
+
         events: list[MarketEvent] = []
-        for row in rows or []:
+        for row in rows:
             event_date = str(row.get("date", today.isoformat()))[:10]
             from_factor = float(row.get("fromFactor") or 1)
             to_factor = float(row.get("toFactor") or 1)
             if from_factor <= 0 or to_factor <= 0:
                 continue
             ratio = to_factor / from_factor
+            if abs(ratio - 1.0) < 1e-12:
+                continue
             if ratio > 1:
                 event_type = EVENT_SPLIT
                 label = f"{from_factor:g}:{to_factor:g} split"

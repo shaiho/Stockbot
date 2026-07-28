@@ -7,6 +7,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
 from src.bot.common import get_user_lang
+from src.market.splits import split_already_applied
 from src.portfolio.corporate_actions import apply_stock_split, format_split_label
 
 router = Router()
@@ -38,8 +39,9 @@ async def apply_split_callback(callback: CallbackQuery, **data) -> None:
         return
 
     applied_key = f"split_applied:{portfolio_id}:{symbol.upper()}:{from_s}x{to_s}"
-    today = datetime.now().date().isoformat()
-    if await ctx.repo.was_alert_sent_today(user.telegram_id, applied_key, today):
+    if await split_already_applied(
+        ctx.repo, portfolio_id, symbol, from_factor, to_factor
+    ):
         await callback.answer(t["event_split_already_applied"], show_alert=True)
         return
 
@@ -50,6 +52,7 @@ async def apply_split_callback(callback: CallbackQuery, **data) -> None:
         await callback.answer(t["event_split_no_trades"], show_alert=True)
         return
 
+    today = datetime.now().date().isoformat()
     await ctx.repo.mark_alert_sent(user.telegram_id, applied_key, today)
     label = format_split_label(from_factor, to_factor)
     await callback.message.edit_text(
@@ -123,7 +126,24 @@ async def record_dividend_callback(callback: CallbackQuery, **data) -> None:
 
 @router.callback_query(F.data.startswith("ca:skip:"))
 async def skip_corporate_action(callback: CallbackQuery, **data) -> None:
-    user, lang = await get_user_lang(data["ctx"].repo, callback.from_user.id)
-    t = data["ctx"].i18n.load(lang)
+    ctx = data["ctx"]
+    user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
+    t = ctx.i18n.load(lang)
+    payload = callback.data.removeprefix("ca:skip:")
+    today = datetime.now().date().isoformat()
+    if payload.startswith("split:"):
+        parts = payload.split(":")
+        if len(parts) == 5:
+            _, symbol, event_date, from_s, to_s = parts
+            alert_key = f"evt:split:{symbol}:{event_date}:{from_s}:{to_s}"
+            await ctx.repo.mark_alert_sent(user.telegram_id, alert_key, today)
+            reverse_key = f"evt:reverse_split:{symbol}:{event_date}:{from_s}:{to_s}"
+            await ctx.repo.mark_alert_sent(user.telegram_id, reverse_key, today)
+    elif payload.startswith("div:"):
+        parts = payload.split(":")
+        if len(parts) == 4:
+            _, symbol, ex_date, amount_s = parts
+            alert_key = f"evt:dividend:{symbol}:{ex_date}:{amount_s}"
+            await ctx.repo.mark_alert_sent(user.telegram_id, alert_key, today)
     await callback.message.edit_text(t["event_action_skipped"])
     await callback.answer()

@@ -21,6 +21,7 @@ from src.bot.keyboards import (
     year_keyboard,
 )
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
+from src.bot.corporate_action_notify import send_pending_split_prompts
 from src.bot.states import HistoryStates, MonthlyStates, PnlStates, QuoteStates, TaxStates, TradeStates
 from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
 from src.portfolio.allocation import compute_allocation
@@ -137,6 +138,8 @@ async def pick_portfolio(callback: CallbackQuery, **data) -> None:
 
 
 async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
+    from datetime import datetime
+
     portfolio = await ctx.repo.get_portfolio(portfolio_id, user.telegram_id)
     if not portfolio:
         return
@@ -187,6 +190,9 @@ async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
     else:
         for part in text_parts:
             await message.answer(part, parse_mode=HTML)
+
+    today = datetime.now().date()
+    await send_pending_split_prompts(message, ctx.repo, portfolio, t, lang, today)
 
 
 async def _send_monthly_report(message, ctx, user, lang, t, portfolio_id: int) -> None:

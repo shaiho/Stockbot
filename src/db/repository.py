@@ -1079,6 +1079,21 @@ class Repository:
             ).fetchone()
             return bool(row and row[0] == today)
 
+    async def was_alert_recorded(self, user_id: int, alert_key: str) -> bool:
+        query = "SELECT 1 FROM alert_state WHERE user_id = ? AND alert_key = ?"
+        args = (user_id, alert_key)
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchrow(self._sql(query, True), *args)
+                return row is not None
+
+        async with aiosqlite.connect(self.db_path) as db:
+            row = await (
+                await db.execute(self._sql(query, False), args)
+            ).fetchone()
+            return row is not None
+
     async def mark_alert_sent(self, user_id: int, alert_key: str, today: str) -> None:
         query = """
             INSERT INTO alert_state (user_id, alert_key, last_sent_date)

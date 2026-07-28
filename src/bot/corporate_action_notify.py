@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import asyncio
+from datetime import date, timedelta
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.db.models import Holding, Portfolio
+from src.db.repository import Repository
 from src.market.events import EVENT_DIVIDEND, EVENT_REVERSE_SPLIT, EVENT_SPLIT, MarketEvent
+from src.market.splits import SPLIT_LOOKBACK_DAYS, fetch_yfinance_splits, split_already_applied
 from src.portfolio.corporate_actions import format_split_label
 
 
@@ -39,7 +44,14 @@ def build_split_message(
         )
 
     rows.append(
-        [InlineKeyboardButton(text=skip_label, callback_data=f"ca:skip:{event.event_key[:40]}")]
+        [
+            InlineKeyboardButton(
+                text=skip_label,
+                callback_data=(
+                    f"ca:skip:split:{event.symbol}:{event.event_date}:{from_f:g}:{to_f:g}"
+                ),
+            )
+        ]
     )
     lines.append("")
     lines.append(t["event_split_apply_hint"])
@@ -87,7 +99,12 @@ def build_dividend_message(
         )
 
     rows.append(
-        [InlineKeyboardButton(text=skip_label, callback_data=f"ca:skip:{event.event_key[:40]}")]
+        [
+            InlineKeyboardButton(
+                text=skip_label,
+                callback_data=f"ca:skip:div:{event.symbol}:{ex_date}:{amount_f:g}",
+            )
+        ]
     )
     lines.append("")
     lines.append(t["event_dividend_apply_hint"])
@@ -96,3 +113,67 @@ def build_dividend_message(
 
 def is_actionable_event(event: MarketEvent) -> bool:
     return event.event_type in (EVENT_SPLIT, EVENT_REVERSE_SPLIT, EVENT_DIVIDEND)
+
+
+def _split_event_from_row(symbol: str, market: str, row: dict) -> MarketEvent:
+    from_factor = float(row.get("fromFactor") or 1)
+    to_factor = float(row.get("toFactor") or 1)
+    event_date = str(row.get("date", ""))[:10]
+    ratio = to_factor / from_factor if from_factor else 1.0
+    if ratio > 1:
+        event_type = EVENT_SPLIT
+        label = f"{from_factor:g}:{to_factor:g} split"
+    else:
+        event_type = EVENT_REVERSE_SPLIT
+        label = f"{to_factor:g}:{from_factor:g} reverse split"
+    return MarketEvent(
+        event_type=event_type,
+        symbol=symbol.upper(),
+        market=market,
+        event_key=f"{event_type}:{symbol.upper()}:{event_date}:{from_factor}:{to_factor}",
+        title=label,
+        body=label,
+        event_date=event_date,
+        meta={"from_factor": from_factor, "to_factor": to_factor},
+    )
+
+
+async def find_pending_split_events(
+    repo: Repository,
+    portfolio: Portfolio,
+    today: date,
+) -> list[tuple[MarketEvent, Holding]]:
+    pending: list[tuple[MarketEvent, Holding]] = []
+    start = today - timedelta(days=SPLIT_LOOKBACK_DAYS)
+    holdings = await repo.get_holdings(portfolio.id)
+    for holding in holdings:
+        if holding.quantity <= 1e-9:
+            continue
+        rows = await asyncio.to_thread(
+            fetch_yfinance_splits,
+            holding.symbol,
+            holding.market,
+            start,
+            today,
+        )
+        for row in rows:
+            event = _split_event_from_row(holding.symbol, holding.market, row)
+            from_f = float(event.meta.get("from_factor", 1))
+            to_f = float(event.meta.get("to_factor", 1))
+            if await split_already_applied(repo, portfolio.id, holding.symbol, from_f, to_f):
+                continue
+            pending.append((event, holding))
+    return pending
+
+
+async def send_pending_split_prompts(
+    message: Message,
+    repo: Repository,
+    portfolio: Portfolio,
+    t: dict,
+    lang: str,
+    today: date,
+) -> None:
+    for event, holding in await find_pending_split_events(repo, portfolio, today):
+        text, keyboard = build_split_message(event, [(portfolio, holding)], t, lang)
+        await message.answer(text, reply_markup=keyboard)
