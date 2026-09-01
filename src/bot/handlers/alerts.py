@@ -149,7 +149,7 @@ async def alert_pick_type(callback: CallbackQuery, state, **data) -> None:
             await callback.message.edit_text(t["no_portfolios"])
             await callback.answer()
             return
-        only = resolve_portfolio(user, portfolios, use_last=False)
+        only = resolve_portfolio(user, portfolios)
         if only:
             await state.update_data(portfolio_id=only.id)
             form = await state.get_data()
@@ -418,7 +418,7 @@ async def alert_smart_holdings(callback: CallbackQuery, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    portfolio = resolve_portfolio(user, portfolios, use_last=False)
+    portfolio = resolve_portfolio(user, portfolios)
     if not portfolio:
         await callback.answer(t["choose_portfolio"], show_alert=True)
         return

@@ -111,7 +111,7 @@ async def menu_portfolio(message: Message, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await _send_summary(message, ctx, user, lang, t, only.id)
@@ -241,7 +241,7 @@ async def menu_monthly(message: Message, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await state.clear()
@@ -271,7 +271,7 @@ async def menu_holdings(message: Message, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await _send_holdings(message, ctx, user, lang, t, only.id)
@@ -462,7 +462,7 @@ async def menu_pnl(message: Message, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await state.update_data(portfolio_id=only.id)
@@ -513,7 +513,7 @@ async def menu_history(message: Message, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await state.update_data(portfolio_id=only.id)
@@ -568,7 +568,7 @@ async def menu_tax(message: Message, state, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios, use_last=False)
+    only = resolve_portfolio(user, portfolios)
     if only:
         await touch_portfolio(ctx.repo, user, only.id)
         await state.update_data(portfolio_id=only.id)

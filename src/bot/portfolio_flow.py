@@ -7,17 +7,12 @@ from src.db.models import Portfolio, User
 from src.db.repository import Repository
 
 
-def resolve_portfolio(
-    user: User, portfolios: list[Portfolio], *, use_last: bool = True
-) -> Portfolio | None:
+def resolve_portfolio(user: User, portfolios: list[Portfolio]) -> Portfolio | None:
+    """Auto-select only when the user has a single portfolio."""
     if not portfolios:
         return None
     if len(portfolios) == 1:
         return portfolios[0]
-    if use_last and user.last_portfolio_id:
-        for portfolio in portfolios:
-            if portfolio.id == user.last_portfolio_id:
-                return portfolio
     return None
 
 
