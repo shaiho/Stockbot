@@ -14,6 +14,7 @@ from src.bot.keyboards import (
 )
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
 from src.bot.states import ExportStates, ImportStates, SettingsStates
+from src.portfolio.commission import calc_trade_commission
 from src.portfolio.exporter import export_portfolio_json
 from src.portfolio.importer import parse_portfolio_import
 from src.portfolio.trade_date import parse_trade_date
@@ -337,6 +338,11 @@ async def _process_import(message, state, ctx, user, t, raw: str) -> None:
             except ValueError:
                 await message.answer(t["import_failed"])
                 return
+        commission = item["commission"]
+        if commission == 0 and item["action"] in ("buy", "sell"):
+            commission = calc_trade_commission(
+                portfolio, item["quantity"], item["price"], item["currency"]
+            )
         await ctx.repo.add_trade(
             portfolio_id=portfolio_id,
             symbol=item["symbol"],
@@ -346,7 +352,7 @@ async def _process_import(message, state, ctx, user, t, raw: str) -> None:
             quantity=item["quantity"],
             price=item["price"],
             currency=item["currency"],
-            commission=item["commission"],
+            commission=commission,
             note=item.get("note"),
             timestamp=timestamp,
         )
