@@ -155,7 +155,7 @@ async def menu_portfolios(message: Message, **data) -> None:
     user, lang = await get_user_lang(ctx.repo, message.from_user.id)
     t = ctx.i18n.load(lang)
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    only = resolve_portfolio(user, portfolios)
+    only = resolve_portfolio(user, portfolios, use_last=False)
     if only:
         await _show_portfolio_manage(message, ctx, user, lang, t, only.id)
         return

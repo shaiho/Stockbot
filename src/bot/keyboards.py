@@ -40,6 +40,66 @@ def main_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=False)
 
 
+def main_menu_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
+    if lang == "he":
+        rows = [
+            [
+                InlineKeyboardButton(text="📊 התיק שלי", callback_data="menu:portfolio"),
+                InlineKeyboardButton(text="📋 החזקות", callback_data="menu:holdings"),
+            ],
+            [
+                InlineKeyboardButton(text="💱 מחיר", callback_data="menu:quote"),
+                InlineKeyboardButton(text="➕ עסקה", callback_data="menu:trade"),
+            ],
+            [
+                InlineKeyboardButton(text="💵 הפקדה", callback_data="menu:cash"),
+                InlineKeyboardButton(text="📈 רווח/הפסד", callback_data="menu:pnl"),
+            ],
+            [
+                InlineKeyboardButton(text="📜 היסטוריה", callback_data="menu:history"),
+                InlineKeyboardButton(text="📋 דוח מס", callback_data="menu:tax"),
+            ],
+            [
+                InlineKeyboardButton(text="📅 דוח חודשי", callback_data="menu:monthly"),
+                InlineKeyboardButton(text="👁 מעקב", callback_data="menu:watchlist"),
+            ],
+            [
+                InlineKeyboardButton(text="🔔 התראות", callback_data="menu:alerts"),
+                InlineKeyboardButton(text="📁 תיקים", callback_data="menu:portfolios"),
+            ],
+            [InlineKeyboardButton(text="⚙️ הגדרות", callback_data="menu:settings")],
+        ]
+    else:
+        rows = [
+            [
+                InlineKeyboardButton(text="📊 Portfolio", callback_data="menu:portfolio"),
+                InlineKeyboardButton(text="📋 Holdings", callback_data="menu:holdings"),
+            ],
+            [
+                InlineKeyboardButton(text="💱 Quote", callback_data="menu:quote"),
+                InlineKeyboardButton(text="➕ Trade", callback_data="menu:trade"),
+            ],
+            [
+                InlineKeyboardButton(text="💵 Deposit", callback_data="menu:cash"),
+                InlineKeyboardButton(text="📈 P&L", callback_data="menu:pnl"),
+            ],
+            [
+                InlineKeyboardButton(text="📜 History", callback_data="menu:history"),
+                InlineKeyboardButton(text="📋 Tax report", callback_data="menu:tax"),
+            ],
+            [
+                InlineKeyboardButton(text="📅 Monthly report", callback_data="menu:monthly"),
+                InlineKeyboardButton(text="👁 Watchlist", callback_data="menu:watchlist"),
+            ],
+            [
+                InlineKeyboardButton(text="🔔 Alerts", callback_data="menu:alerts"),
+                InlineKeyboardButton(text="📁 Portfolios", callback_data="menu:portfolios"),
+            ],
+            [InlineKeyboardButton(text="⚙️ Settings", callback_data="menu:settings")],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def portfolio_picker_keyboard(
     portfolios: list[Portfolio], lang: str, *, include_new: bool = False, action: str = "pick_portfolio"
 ) -> InlineKeyboardMarkup:

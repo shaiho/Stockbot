@@ -217,7 +217,7 @@ async def settings_import_start(callback: CallbackQuery, state, **data) -> None:
         await callback.message.edit_text(t["no_portfolios"])
         await callback.answer()
         return
-    only = resolve_portfolio(user, portfolios)
+    only = resolve_portfolio(user, portfolios, use_last=False)
     if only:
         await state.update_data(portfolio_id=only.id)
         await state.set_state(ImportStates.json_data)
@@ -346,7 +346,7 @@ async def settings_export_start(callback: CallbackQuery, state, **data) -> None:
         await callback.message.edit_text(t["no_portfolios"])
         await callback.answer()
         return
-    only = resolve_portfolio(user, portfolios)
+    only = resolve_portfolio(user, portfolios, use_last=False)
     if only:
         await _send_portfolio_export(callback.message, ctx, user, t, only.id)
         await callback.answer()

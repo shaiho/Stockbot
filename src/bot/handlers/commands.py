@@ -46,7 +46,7 @@ async def cmd_pnl(message: Message, state, **data) -> None:
     symbol = parts[1].strip().upper() if len(parts) > 1 else None
 
     portfolios = await ctx.repo.get_portfolios(user.telegram_id)
-    portfolio = resolve_portfolio(user, portfolios)
+    portfolio = resolve_portfolio(user, portfolios, use_last=False)
     if portfolio:
         await touch_portfolio(ctx.repo, user, portfolio.id)
         if symbol:

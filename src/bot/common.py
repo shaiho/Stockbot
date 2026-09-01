@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from src.bot.i18n import I18n
-from src.bot.keyboards import main_menu_keyboard
+from src.bot.keyboards import main_menu_inline_keyboard
 from src.db.repository import Repository
 from src.market.prices import PriceProvider
 from src.portfolio.calculator import PortfolioCalculator
@@ -61,5 +61,18 @@ async def get_user_lang(repo: Repository, telegram_id: int) -> tuple:
     return user, user.language
 
 
+async def dismiss_reply_keyboard(message: Message) -> None:
+    """Remove the custom reply keyboard so Android back / system nav work normally."""
+    try:
+        sent = await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
+        await sent.delete()
+    except Exception:
+        pass
+
+
 async def show_main_menu(message: Message, lang: str, t: dict, *, text: str | None = None) -> None:
-    await message.answer(text or t["main_menu"], reply_markup=main_menu_keyboard(lang))
+    await dismiss_reply_keyboard(message)
+    await message.answer(
+        text or t["main_menu"],
+        reply_markup=main_menu_inline_keyboard(lang),
+    )
