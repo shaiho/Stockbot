@@ -543,6 +543,25 @@ class Repository:
             await db.commit()
             return cursor.rowcount > 0
 
+    async def delete_portfolio_trades(self, portfolio_id: int, user_id: int) -> int:
+        query = """
+            DELETE FROM trades
+            WHERE portfolio_id = ? AND portfolio_id IN (
+                SELECT id FROM portfolios WHERE user_id = ?
+            )
+        """
+        args = (portfolio_id, user_id)
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                result = await conn.execute(self._sql(query, True), *args)
+                return int(result.split()[-1]) if result else 0
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(self._sql(query, False), args)
+            await db.commit()
+            return cursor.rowcount
+
     async def update_trade(
         self,
         trade_id: int,

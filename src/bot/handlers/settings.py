@@ -284,16 +284,52 @@ async def _process_import(message, state, ctx, user, t, raw: str) -> None:
         await message.answer(t["import_failed"])
         return
 
+    if parsed["trades"]:
+        opening_ils = (
+            parsed["opening_cash_ils"]
+            if parsed["opening_cash_ils"] is not None
+            else 0.0
+        )
+        opening_usd = (
+            parsed["opening_cash_usd"]
+            if parsed["opening_cash_usd"] is not None
+            else 0.0
+        )
+    else:
+        opening_ils = (
+            parsed["opening_cash_ils"]
+            if parsed["opening_cash_ils"] is not None
+            else parsed["cash_ils"]
+        )
+        opening_usd = (
+            parsed["opening_cash_usd"]
+            if parsed["opening_cash_usd"] is not None
+            else parsed["cash_usd"]
+        )
+
     await ctx.repo.update_portfolio_opening_cash(
         portfolio_id,
         user.telegram_id,
-        parsed["cash_ils"],
-        parsed["cash_usd"],
+        opening_ils,
+        opening_usd,
     )
-    count = 0
-    for item in parsed["holdings"]:
-        if item["quantity"] <= 0:
-            continue
+
+    if parsed["trades"] and parsed["replace"]:
+        await ctx.repo.delete_portfolio_trades(portfolio_id, user.telegram_id)
+
+    trade_count = 0
+    indexed_trades = list(enumerate(parsed["trades"]))
+
+    def _sort_key(entry: tuple[int, dict]) -> tuple:
+        idx, trade = entry
+        if not trade.get("date"):
+            return (1, idx)
+        try:
+            return (0, parse_trade_date(str(trade["date"])))
+        except ValueError:
+            return (1, idx)
+
+    for _, item in sorted(indexed_trades, key=_sort_key):
         timestamp = None
         if item.get("date"):
             try:
@@ -305,19 +341,49 @@ async def _process_import(message, state, ctx, user, t, raw: str) -> None:
             portfolio_id=portfolio_id,
             symbol=item["symbol"],
             market=item["market"],
-            asset_type=item["asset_type"],
-            action="buy",
+            asset_type=item.get("asset_type", "stock"),
+            action=item["action"],
             quantity=item["quantity"],
-            price=item["avg_cost"],
+            price=item["price"],
             currency=item["currency"],
-            commission=0.0,
-            note="import",
+            commission=item["commission"],
+            note=item.get("note"),
             timestamp=timestamp,
         )
-        count += 1
+        trade_count += 1
+
+    holding_count = 0
+    if not parsed["trades"]:
+        for item in parsed["holdings"]:
+            if item["quantity"] <= 0:
+                continue
+            timestamp = None
+            if item.get("date"):
+                try:
+                    timestamp = parse_trade_date(str(item["date"]))
+                except ValueError:
+                    await message.answer(t["import_failed"])
+                    return
+            await ctx.repo.add_trade(
+                portfolio_id=portfolio_id,
+                symbol=item["symbol"],
+                market=item["market"],
+                asset_type=item["asset_type"],
+                action="buy",
+                quantity=item["quantity"],
+                price=item["avg_cost"],
+                currency=item["currency"],
+                commission=0.0,
+                note="import",
+                timestamp=timestamp,
+            )
+            holding_count += 1
 
     await state.clear()
-    await message.answer(t["import_done"].format(holdings=count))
+    if trade_count:
+        await message.answer(t["import_done_trades"].format(trades=trade_count))
+    else:
+        await message.answer(t["import_done"].format(holdings=holding_count))
 
 
 async def _send_portfolio_export(message, ctx, user, t, portfolio_id: int) -> None:
