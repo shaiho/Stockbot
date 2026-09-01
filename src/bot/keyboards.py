@@ -37,7 +37,7 @@ def main_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
             [KeyboardButton(text="🔔 Alerts"), KeyboardButton(text="📁 Portfolios")],
             [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="🏠 Main menu")],
         ]
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True)
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=False)
 
 
 def portfolio_picker_keyboard(
