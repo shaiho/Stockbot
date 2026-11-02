@@ -254,7 +254,7 @@ sudo chown -R www-data:www-data /opt/stockbot/web/cache
 sudo chmod 640 /opt/stockbot/.env && sudo chgrp www-data /opt/stockbot/.env
 ```
 
-**Apache, בלי HTTPS** (`deploy/apache-stockbot-web.conf` מאזין רק ל-`127.0.0.1:8080`; הגישה דרך מנהרת SSH, כך שהסיסמה לא עוברת גלויה ברשת):
+**Apache, בלי HTTPS** (`deploy/apache-stockbot-web.conf` מאזין רק ל-`127.0.0.1:18765` — לבדוק קודם שהפורט פנוי: `sudo ss -ltnp | grep 18765`; הגישה דרך מנהרת SSH, כך שהסיסמה לא עוברת גלויה ברשת):
 
 ```bash
 sudo apt install -y apache2 libapache2-mod-php php-pgsql php-curl php-mbstring
@@ -266,8 +266,8 @@ sudo apache2ctl configtest && sudo systemctl reload apache2
 מהמחשב שלך:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@VPS_IP
-# ואז בדפדפן: http://localhost:8080
+ssh -L 18765:127.0.0.1:18765 user@VPS_IP
+# ואז בדפדפן: http://localhost:18765
 ```
 
 חשיפה ציבורית ב-HTTP (לא מומלץ): בקובץ ה-conf מחליפים `127.0.0.1` ב-`*` ומפעילים `Require ip <ה-IP שלך>`. ה-IP allowlist מגביל מי יכול לנסות להתחבר, אבל הסיסמה עדיין עוברת לא מוצפנת.
