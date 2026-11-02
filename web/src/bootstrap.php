@@ -19,6 +19,8 @@ function load_env(string $path): array
         $v = trim($v);
         if (strlen($v) >= 2 && ($v[0] === '"' || $v[0] === "'") && $v[-1] === $v[0]) {
             $v = substr($v, 1, -1);
+        } else {
+            $v = rtrim(preg_replace('/\s+#.*$/', '', $v));
         }
         $vars[trim($k)] = $v;
     }
