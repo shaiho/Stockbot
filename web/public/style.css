@@ -1,0 +1,69 @@
+:root {
+  --bg: #f4f6f9; --card: #fff; --text: #1c2430; --muted: #6b7686; --line: #e2e7ee;
+  --accent: #1f6feb; --pos: #0f8a4b; --neg: #d1344b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f141b; --card: #171e28; --text: #e6ebf2; --muted: #8b97a8; --line: #263041; --accent: #4c8dff; --pos: #3ecf8e; --neg: #ff6b81; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+main { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+h1 { font-size: 1.5rem; margin: .5rem 0 1rem; }
+h2 { font-size: 1.15rem; margin: 1.5rem 0 .75rem; }
+h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.muted { color: var(--muted); }
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+
+.top { display: flex; align-items: center; gap: 1.25rem; padding: .6rem 1rem; background: var(--card); border-bottom: 1px solid var(--line); }
+.top nav { display: flex; gap: 1rem; flex: 1; }
+.brand { font-weight: 700; color: var(--text); }
+.head { display: flex; justify-content: space-between; align-items: baseline; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.tile { color: inherit; display: block; }
+.tile:hover { border-color: var(--accent); text-decoration: none; }
+.tile h2 { margin: 0 0 .5rem; }
+.big { font-size: 1.6rem; font-weight: 700; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem; margin: .75rem 0 0; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: end; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
+.stats .card { display: flex; flex-direction: column; gap: .15rem; }
+.stats span, .stats small { color: var(--muted); font-size: .85rem; }
+.stats b { font-size: 1.25rem; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; align-items: start; }
+.form { display: flex; flex-direction: column; gap: .6rem; max-width: 520px; }
+.two .form { max-width: none; }
+.form h2, .form h3 { margin: 0; }
+label { display: flex; flex-direction: column; gap: .2rem; color: var(--muted); font-size: .9rem; }
+input, select { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button { font: inherit; padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger, .danger { color: var(--neg); }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); }
+button.link.danger { color: var(--neg); }
+
+.scroll { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+th, td { padding: .5rem .75rem; text-align: start; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; font-size: .85rem; }
+tr:last-child td { border-bottom: 0; }
+.actions { display: flex; gap: .75rem; align-items: center; }
+.actions form { margin: 0; }
+.chip { display: inline-block; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 999px; margin-inline-end: .25rem; }
+
+.flash { padding: .6rem .9rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid; }
+.flash.ok { color: var(--pos); border-color: var(--pos); }
+.flash.err { color: var(--neg); border-color: var(--neg); }
+.login { max-width: 340px; margin: 15vh auto 0; display: flex; flex-direction: column; gap: .8rem; }
+.login h1 { text-align: center; margin: 0; }
+section { margin-bottom: 1rem; }

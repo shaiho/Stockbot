@@ -8,3 +8,5 @@ data/stockbot.db
 data/*.db
 .pytest_cache/
 .mypy_cache/
+
+web/cache/

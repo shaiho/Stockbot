@@ -218,6 +218,51 @@ python -m scripts.migrate_sqlite_to_postgres
 
 
 
+## אתר ניהול (PHP)
+
+אתר ב-`web/` שעובד ישירות על אותו DB של הבוט (Supabase Postgres, `DATABASE_URL`), בלי שכבת סנכרון — כל שינוי באתר נראה מיד בבוט ולהיפך.
+מנהל: תיקים והגדרות עמלות, עסקאות (קנייה/מכירה/דיבידנד), מזומן, watchlist, התראות והגדרות משתמש; מציג החזקות, רווח/הפסד ומחירים חיים.
+
+דרישות: PHP 8.1+ עם `pdo_pgsql`, `curl`, `mbstring`.
+
+```bash
+sudo apt install -y nginx php-fpm php-pgsql php-curl php-mbstring
+```
+
+ב-`.env` (אותו קובץ של הבוט) מוסיפים:
+
+```env
+WEB_PASSWORD=סיסמה-חזקה
+WEB_TELEGRAM_ID=123456789   # ה-Telegram ID שהחשבונות שלו מנוהלים באתר
+```
+
+- אפשר גם hash במקום סיסמה גלויה: `php -r "echo password_hash('הסיסמה', PASSWORD_DEFAULT);"` ולהדביק ב-`WEB_PASSWORD`.
+- `FINNHUB_API_KEY` (אופציונלי) משמש גם את האתר למחירי US; בלעדיו Yahoo בלבד. מחירים נשמרים ב-cache של 5 דקות (`PRICE_CACHE_SECONDS`).
+- `WEB_DEBUG=1` מציג את הודעת השגיאה המלאה בדפדפן (לא להשאיר בפרודקשן).
+
+הרצה מקומית לבדיקה:
+
+```bash
+php -S 127.0.0.1:8080 -t web/public
+```
+
+פריסה על ה-VPS (ליד הבוט):
+
+```bash
+sudo mkdir -p /opt/stockbot/web/cache
+sudo chown -R www-data:www-data /opt/stockbot/web/cache
+sudo chmod 640 /opt/stockbot/.env && sudo chgrp www-data /opt/stockbot/.env
+sudo cp deploy/nginx-stockbot-web.conf /etc/nginx/sites-available/stockbot-web
+sudo ln -s /etc/nginx/sites-available/stockbot-web /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d stockbot.example.com   # HTTPS - חובה, אחרת הסיסמה עוברת גלויה
+```
+
+הערות:
+- ה-document root הוא `web/public` בלבד; `.env` וקוד המקור לא נגישים מהרשת.
+- האתר לא יוצר טבלאות — הן נוצרות על ידי הבוט בהפעלה הראשונה. האתר תומך רק ב-Postgres.
+- תאריכי עסקאות נשמרים כרגע אמיתי (UTC) ומוצגים לפי `TIMEZONE`; עסקה עם תאריך בלבד נשמרת ב-12:00 שעון ישראל, כמו בבוט.
+
 ## מבנה
 
 
@@ -237,6 +282,7 @@ src/
   portfolio/        # P&L, formatters, import
 
   scheduler/        # דוחות + alerts
+web/                # אתר ניהול PHP (public/ = document root)
 
 ```
 
