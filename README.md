@@ -226,7 +226,7 @@ python -m scripts.migrate_sqlite_to_postgres
 דרישות: PHP 8.1+ עם `pdo_pgsql`, `curl`, `mbstring`.
 
 ```bash
-sudo apt install -y nginx php-fpm php-pgsql php-curl php-mbstring
+sudo apt install -y php-pgsql php-curl php-mbstring   # + שרת web: ראו "פריסה" למטה (Apache / nginx)
 ```
 
 ב-`.env` (אותו קובץ של הבוט) מוסיפים:
@@ -246,17 +246,33 @@ WEB_TELEGRAM_ID=123456789   # ה-Telegram ID שהחשבונות שלו מנוה�
 php -S 127.0.0.1:8080 -t web/public
 ```
 
-פריסה על ה-VPS (ליד הבוט):
+פריסה על ה-VPS (ליד הבוט) — הכנה משותפת:
 
 ```bash
 sudo mkdir -p /opt/stockbot/web/cache
 sudo chown -R www-data:www-data /opt/stockbot/web/cache
 sudo chmod 640 /opt/stockbot/.env && sudo chgrp www-data /opt/stockbot/.env
-sudo cp deploy/nginx-stockbot-web.conf /etc/nginx/sites-available/stockbot-web
-sudo ln -s /etc/nginx/sites-available/stockbot-web /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d stockbot.example.com   # HTTPS - חובה, אחרת הסיסמה עוברת גלויה
 ```
+
+**Apache, בלי HTTPS** (`deploy/apache-stockbot-web.conf` מאזין רק ל-`127.0.0.1:8080`; הגישה דרך מנהרת SSH, כך שהסיסמה לא עוברת גלויה ברשת):
+
+```bash
+sudo apt install -y apache2 libapache2-mod-php php-pgsql php-curl php-mbstring
+sudo cp deploy/apache-stockbot-web.conf /etc/apache2/sites-available/stockbot-web.conf
+sudo a2ensite stockbot-web
+sudo apache2ctl configtest && sudo systemctl reload apache2
+```
+
+מהמחשב שלך:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@VPS_IP
+# ואז בדפדפן: http://localhost:8080
+```
+
+חשיפה ציבורית ב-HTTP (לא מומלץ): בקובץ ה-conf מחליפים `127.0.0.1` ב-`*` ומפעילים `Require ip <ה-IP שלך>`. ה-IP allowlist מגביל מי יכול לנסות להתחבר, אבל הסיסמה עדיין עוברת לא מוצפנת.
+
+**nginx + HTTPS** (אם יתאפשר): `deploy/nginx-stockbot-web.conf` ואז `sudo certbot --nginx -d stockbot.example.com`.
 
 הערות:
 - ה-document root הוא `web/public` בלבד; `.env` וקוד המקור לא נגישים מהרשת.
