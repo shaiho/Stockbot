@@ -9,6 +9,7 @@ $pid = $p['id'];
 
 <div class="stats">
   <div class="card"><span>שווי כולל</span><b><?= money($sum['total_ils']) ?></b><small><?= money($sum['total_usd'], 'USD') ?> · $1 = ₪<?= number_format($sum['fx'], 3) ?></small></div>
+  <div class="card"><span>שווי ניירות ערך</span><b><?= money($sum['securities_ils']) ?></b><small><?= money($sum['securities_usd'], 'USD') ?> · בלי מזומן</small></div>
   <div class="card"><span>רווח/הפסד כולל</span><b class="<?= tone($sum['total_pnl_ils']) ?>"><?= money($sum['total_pnl_ils'], 'ILS', true) ?></b><small><?= pct($sum['total_pnl_pct']) ?> על הון <?= money($sum['opening_capital_ils']) ?></small></div>
   <div class="card"><span>שינוי יומי</span><b class="<?= tone($sum['daily_change_ils']) ?>"><?= money($sum['daily_change_ils'], 'ILS', true) ?></b></div>
   <div class="card"><span>רווח מהשקעות</span><b class="<?= tone($sum['investments_pnl_ils']) ?>"><?= money($sum['investments_pnl_ils'], 'ILS', true) ?></b><small>ממומש + לא ממומש</small></div>

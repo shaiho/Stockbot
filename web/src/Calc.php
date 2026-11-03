@@ -168,13 +168,13 @@ final class Calc
         }
 
         $rows = [];
-        $total = $cashIls + $cashUsd * $fx;
+        $securities = 0.0;
         usort($holdings, fn($a, $b) => strcmp($a['symbol'], $b['symbol']));
         foreach ($holdings as $h) {
             $sym = strtoupper($h['symbol']);
             $q = $quotes[Prices::key($h['symbol'], $h['market'])] ?? null;
             if ($q) {
-                $total += self::toIls($h['quantity'] * $q['price'], $h['currency'], $fx);
+                $securities += self::toIls($h['quantity'] * $q['price'], $h['currency'], $fx);
             }
             if (isset($rows[$sym])) {
                 continue;
@@ -199,6 +199,7 @@ final class Calc
                 $netDeposits += $t['action'] === 'deposit' ? $amt : ($t['action'] === 'withdraw' ? -$amt : 0.0);
             }
         }
+        $total = $cashIls + $cashUsd * $fx + $securities;
         $opening = $p['opening_cash_ils'] + $p['opening_cash_usd'] * $fx + $netDeposits;
         $totalPnl = $total - $opening;
 
@@ -206,6 +207,8 @@ final class Calc
             'fx' => $fx,
             'cash_ils' => $cashIls,
             'cash_usd' => $cashUsd,
+            'securities_ils' => $securities,
+            'securities_usd' => $fx ? $securities / $fx : 0.0,
             'total_ils' => $total,
             'total_usd' => $fx ? $total / $fx : 0.0,
             'opening_capital_ils' => $opening,
