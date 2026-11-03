@@ -139,6 +139,89 @@ final class Calc
         ];
     }
 
+    /** @return array{0:float,1:float} [qty, cost] from buys/sells dated before $before (port of _position_at_date) */
+    private static function positionBefore(array $trades, string $before): array
+    {
+        $qty = $cost = 0.0;
+        foreach ($trades as $t) {
+            if (!in_array($t['action'], ['buy', 'sell'], true) || self::localDate($t) >= $before) {
+                continue;
+            }
+            if ($t['action'] === 'buy') {
+                $qty += $t['quantity'];
+                $cost += $t['quantity'] * $t['price'];
+            } elseif ($qty > 0) {
+                $cost -= $cost / $qty * $t['quantity'];
+                $qty -= $t['quantity'];
+            }
+        }
+        return [$qty, $cost];
+    }
+
+    /**
+     * Port of calc_symbol_daily_pnl + calc_symbol_daily_pnl_pct: position-aware, so same-day buys use
+     * their own cost and same-day sells use the previous close.
+     * @param array $trades one symbol's trades, oldest first
+     * @return array{0:float,1:?float}|null [amount, pct]
+     */
+    public static function symbolDaily(array $trades, ?array $quote, string $today): ?array
+    {
+        $prev = $quote['prev_close'] ?? null;
+        if ($prev === null) {
+            return null;
+        }
+        $price = $quote['price'];
+        $stock = array_values(array_filter($trades, fn($t) => in_array($t['action'], ['buy', 'sell'], true) && self::localDate($t) <= $today));
+        if (!$stock) {
+            return null;
+        }
+        $todayTrades = array_values(array_filter($stock, fn($t) => self::localDate($t) === $today));
+        [$qtyOpen, $costOpen] = self::positionBefore($stock, $today);
+        if (!$todayTrades && $qtyOpen <= self::EPS) {
+            return null;
+        }
+
+        $qtyTotal = $qtyOpen;
+        $costTotal = $costOpen;
+        $boughtQty = $boughtCost = $daily = 0.0;
+        foreach ($todayTrades as $t) {
+            if ($t['action'] === 'buy') {
+                $qtyTotal += $t['quantity'];
+                $costTotal += $t['quantity'] * $t['price'];
+                $boughtQty += $t['quantity'];
+                $boughtCost += $t['quantity'] * $t['price'];
+            } elseif ($qtyTotal > 0) {
+                $sell = min($t['quantity'], $qtyTotal);
+                $fromOvernight = min($sell, max($qtyTotal - $boughtQty, 0.0));
+                $fromToday = $sell - $fromOvernight;
+                $daily += $fromOvernight * ($t['price'] - $prev);
+                $avgToday = $boughtQty > 0 ? $boughtCost / $boughtQty : 0.0;
+                if ($fromToday > 0 && $boughtQty > 0) {
+                    $daily += $fromToday * ($t['price'] - $avgToday);
+                }
+                $costTotal -= $costTotal / $qtyTotal * $sell;
+                $qtyTotal -= $sell;
+                if ($fromToday > 0 && $boughtQty > 0) {
+                    $boughtCost -= $avgToday * $fromToday;
+                    $boughtQty -= $fromToday;
+                }
+            }
+        }
+        $overnightEnd = max($qtyTotal - $boughtQty, 0.0);
+        $daily += $overnightEnd * ($price - $prev);
+        if ($boughtQty > 0) {
+            $daily += $boughtQty * ($price - $boughtCost / $boughtQty);
+        }
+
+        $basis = $qtyOpen * $prev;
+        foreach ($todayTrades as $t) {
+            if ($t['action'] === 'buy') {
+                $basis += $t['quantity'] * $t['price'];
+            }
+        }
+        return [$daily, $basis > 0 ? $daily / $basis * 100 : null];
+    }
+
     /**
      * @param array<string, array|null> $quotes keyed by Prices::key()
      */
@@ -185,6 +268,12 @@ final class Calc
                 $pnl['avg_cost'] = $h['avg_cost'];
                 $pnl['currency'] = $h['currency'];
                 $pnl['unrealized'] = $q ? ($q['price'] - $h['avg_cost']) * $h['quantity'] : 0.0;
+            }
+            $symTrades = array_values(array_filter($trades, fn($t) => $t['asset_type'] !== 'cash' && strtoupper($t['symbol']) === $sym));
+            $daily = self::symbolDaily($symTrades, $q, self::today());
+            $pnl['daily'] = $daily[0] ?? null;
+            if ($daily && $daily[1] !== null) {
+                $pnl['change_pct'] = $daily[1];
             }
             $pnl['market'] = $h['market'];
             $pnl['value'] = $q ? $pnl['quantity'] * $q['price'] : null;

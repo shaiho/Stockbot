@@ -23,7 +23,7 @@ $pid = $p['id'];
     <p class="muted">אין החזקות פתוחות.</p>
   <?php else: ?>
   <div class="scroll"><table>
-    <thead><tr><th>סימול</th><th>כמות</th><th>עלות ממוצעת</th><th>מחיר</th><th>יומי</th><th>שווי</th><th>לא ממומש</th><th>ממומש</th><th>עמלות</th></tr></thead>
+    <thead><tr><th>סימול</th><th>כמות</th><th>עלות ממוצעת</th><th>מחיר</th><th>יומי %</th><th>שינוי יומי</th><th>שווי</th><th>לא ממומש</th><th>ממומש</th><th>עמלות</th></tr></thead>
     <tbody>
     <?php foreach ($sum['holdings'] as $r): $c = $r['currency']; ?>
       <tr>
@@ -32,6 +32,7 @@ $pid = $p['id'];
         <td><?= money($r['avg_cost'], $c) ?></td>
         <td><?= $r['price'] === null ? '<span class="neg">אין מחיר</span>' : money($r['price'], $c) ?></td>
         <td class="<?= tone($r['change_pct']) ?>"><?= pct($r['change_pct']) ?></td>
+        <td class="<?= tone($r['daily']) ?>"><?= $r['daily'] === null ? '—' : money($r['daily'], $c, true) ?></td>
         <td><?= $r['value'] === null ? '—' : money($r['value'], $c) ?></td>
         <td class="<?= tone($r['unrealized']) ?>"><?= money($r['unrealized'], $c, true) ?> <small>(<?= pct($r['unrealized_pct']) ?>)</small></td>
         <td class="<?= tone($r['realized']) ?>"><?= money($r['realized'], $c, true) ?></td>
