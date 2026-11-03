@@ -1,4 +1,5 @@
 <div class="head"><h1>התיקים שלי</h1></div>
+<?php if ($portfolios) { require __DIR__ . '/_refresh.php'; } ?>
 
 <?php if (!$portfolios): ?>
   <p class="muted">אין עדיין תיקים. צור את הראשון למטה.</p>

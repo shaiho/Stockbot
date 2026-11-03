@@ -26,7 +26,7 @@ final class Prices
      * @param list<array{0:string,1:string}> $pairs [symbol, market]
      * @return array<string, array{price:float, prev_close:?float, change_pct:float}|null>
      */
-    public function quotes(array $pairs): array
+    public function quotes(array $pairs, bool $fresh = false): array
     {
         $out = [];
         $missing = [];
@@ -35,7 +35,7 @@ final class Prices
             if (array_key_exists($k, $out)) {
                 continue;
             }
-            $out[$k] = $this->cached($k);
+            $out[$k] = $fresh ? null : $this->cached($k);
             if ($out[$k] === null) {
                 $missing[$k] = [strtoupper($symbol), $market];
             }
@@ -67,6 +67,8 @@ final class Prices
         foreach ($missing as $k => $_) {
             if ($out[$k] !== null) {
                 $this->store($k, $out[$k]);
+            } elseif ($fresh) {
+                $out[$k] = $this->cached($k, true);
             }
         }
         return $out;
@@ -105,17 +107,21 @@ final class Prices
             }
             $prev = (float) ($meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0) ?: null;
         }
-        return ['price' => $price, 'prev_close' => $prev, 'change_pct' => $prev ? ($price - $prev) / $prev * 100 : 0.0];
+        return ['price' => $price, 'prev_close' => $prev, 'change_pct' => $prev ? ($price - $prev) / $prev * 100 : 0.0, 'ts' => time()];
     }
 
-    private function cached(string $key): ?array
+    private function cached(string $key, bool $stale = false): ?array
     {
         $f = $this->cacheFile($key);
-        if (!is_file($f) || time() - filemtime($f) >= $this->ttl) {
+        if (!is_file($f) || (!$stale && time() - filemtime($f) >= $this->ttl)) {
             return null;
         }
         $q = json_decode((string) file_get_contents($f), true);
-        return is_array($q) ? $q : null;
+        if (!is_array($q)) {
+            return null;
+        }
+        $q['ts'] ??= filemtime($f);
+        return $q;
     }
 
     private function store(string $key, array $quote): void

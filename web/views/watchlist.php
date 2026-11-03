@@ -1,4 +1,5 @@
 <div class="head"><h1>רשימת מעקב</h1></div>
+<?php if ($items) { require __DIR__ . '/_refresh.php'; } ?>
 
 <?php if (!$items): ?>
   <p class="muted">הרשימה ריקה.</p>

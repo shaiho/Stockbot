@@ -6,6 +6,7 @@ $pid = $p['id'];
   <h1><?= h($p['name']) ?></h1>
   <a href="?p=dashboard">← כל התיקים</a>
 </div>
+<?php require __DIR__ . '/_refresh.php'; ?>
 
 <div class="stats">
   <div class="card"><span>שווי כולל</span><b><?= money($sum['total_ils']) ?></b><small><?= money($sum['total_usd'], 'USD') ?> · $1 = ₪<?= number_format($sum['fx'], 3) ?></small></div>

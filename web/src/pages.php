@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-function summaries(array $portfolios): array
+/** @return array{0: array<int, array>, 1: array<string, array|null>} [per-portfolio data, quotes] */
+function summaries(array $portfolios, bool $fresh = false): array
 {
     $repo = repo();
     $tradesBy = [];
@@ -10,13 +11,20 @@ function summaries(array $portfolios): array
         $tradesBy[$p['id']] = $repo->trades($p['id']);
         array_push($pairs, ...Calc::quotePairs($tradesBy[$p['id']]));
     }
-    $quotes = prices()->quotes($pairs);
+    $quotes = prices()->quotes($pairs, $fresh);
     $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
     $out = [];
     foreach ($portfolios as $p) {
         $out[$p['id']] = ['trades' => $tradesBy[$p['id']], 'sum' => Calc::summary($p, $tradesBy[$p['id']], $quotes, $fx)];
     }
-    return $out;
+    return [$out, $quotes];
+}
+
+/** Timestamp of the oldest quote used, or null when there are none. */
+function priced_at(array $quotes): ?int
+{
+    $ts = array_filter(array_map(fn($q) => $q['ts'] ?? null, $quotes));
+    return $ts ? (int) min($ts) : null;
 }
 
 function handle_page(string $page): never
@@ -30,12 +38,14 @@ function handle_page(string $page): never
 
     $uid = current_user_id();
     $repo = repo();
+    $fresh = ($_GET['refresh'] ?? '') === '1';
 
     switch ($page) {
         case 'portfolio':
             $p = owned_portfolio((int) ($_GET['id'] ?? 0));
-            $all = summaries([$p])[$p['id']];
-            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum']], $p['name']);
+            [$data, $quotes] = summaries([$p], $fresh);
+            $all = $data[$p['id']];
+            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'pricedAt' => priced_at($quotes)], $p['name']);
 
         case 'trade':
             $trade = $repo->trade((int) ($_GET['id'] ?? 0), $uid);
@@ -46,8 +56,8 @@ function handle_page(string $page): never
 
         case 'watchlist':
             $items = $repo->watchlist($uid);
-            $quotes = prices()->quotes(array_map(fn($i) => [$i['symbol'], $i['market']], $items));
-            render('watchlist', ['items' => $items, 'quotes' => $quotes], 'מעקב');
+            $quotes = prices()->quotes(array_map(fn($i) => [$i['symbol'], $i['market']], $items), $fresh);
+            render('watchlist', ['items' => $items, 'quotes' => $quotes, 'pricedAt' => priced_at($quotes)], 'מעקב');
 
         case 'alerts':
             render('alerts', ['rules' => $repo->alertRules($uid), 'portfolios' => $repo->portfolios($uid)], 'התראות');
@@ -58,6 +68,7 @@ function handle_page(string $page): never
         case 'dashboard':
         default:
             $portfolios = $repo->portfolios($uid);
-            render('dashboard', ['portfolios' => $portfolios, 'data' => $portfolios ? summaries($portfolios) : []], 'תיקים');
+            [$data, $quotes] = $portfolios ? summaries($portfolios, $fresh) : [[], []];
+            render('dashboard', ['portfolios' => $portfolios, 'data' => $data, 'pricedAt' => priced_at($quotes)], 'תיקים');
     }
 }
