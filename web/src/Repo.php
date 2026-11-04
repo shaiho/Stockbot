@@ -174,6 +174,37 @@ final class Repo
         }, $rows);
     }
 
+    /** One round trip for the symbol page: [trades(with portfolio_name), watchlist rows, alert rules, pending orders]. */
+    public function symbolData(int $userId, string $symbol): array
+    {
+        $row = $this->run(
+            "SELECT (SELECT coalesce(json_agg(t ORDER BY t.timestamp, t.id), '[]') FROM
+                     (SELECT t.*, p.name AS portfolio_name FROM trades t JOIN portfolios p ON p.id = t.portfolio_id
+                      WHERE p.user_id = ? AND t.asset_type <> 'cash' AND UPPER(t.symbol) = ?) t) AS trades,
+                    (SELECT coalesce(json_agg(w), '[]') FROM watchlist w WHERE w.user_id = ? AND UPPER(w.symbol) = ?) AS watch,
+                    (SELECT coalesce(json_agg(r ORDER BY r.id), '[]') FROM alert_rules r WHERE r.user_id = ?) AS rules,
+                    (SELECT coalesce(json_agg(o ORDER BY o.status = 'open' DESC, o.id DESC), '[]')
+                     FROM pending_orders o WHERE o.user_id = ? AND UPPER(o.symbol) = ?) AS orders",
+            [$userId, strtoupper($symbol), $userId, strtoupper($symbol), $userId, $userId, strtoupper($symbol)]
+        )->fetch();
+        $trades = array_map(function (array $r): array {
+            $t = $this->hydrateTrade($r);
+            $t['portfolio_name'] = $r['portfolio_name'];
+            return $t;
+        }, json_decode((string) $row['trades'], true) ?: []);
+        $rules = array_map(function (array $r): array {
+            $r['config'] = json_decode((string) $r['config'], true) ?: [];
+            $r['enabled'] = (bool) $r['enabled'];
+            return $r;
+        }, json_decode((string) $row['rules'], true) ?: []);
+        return [
+            $trades,
+            json_decode((string) $row['watch'], true) ?: [],
+            $rules,
+            array_map([$this, 'hydrateOrder'], json_decode((string) $row['orders'], true) ?: []),
+        ];
+    }
+
     public function trade(int $id, int $userId): ?array
     {
         $row = $this->run(

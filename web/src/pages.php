@@ -107,28 +107,22 @@ function handle_page(string $page): never
             if (!preg_match('/^[A-Z0-9.\-^=]{1,20}$/', $symbol)) {
                 fail('סימול לא תקין', '?p=dashboard');
             }
-            $symTrades = $repo->tradesBySymbol($uid, $symbol);
-            $watch = array_values(array_filter($repo->watchlist($uid), fn($w) => strtoupper($w['symbol']) === $symbol));
+            [$symTrades, $watchRows, $rules, $orders] = $repo->symbolData($uid, $symbol);
+            $watch = array_values(array_filter($watchRows, fn($w) => strtoupper($w['symbol']) === $symbol));
             $market = in_array($_GET['market'] ?? '', ['US', 'IL'], true) ? $_GET['market']
                 : ($symTrades[0]['market'] ?? ($watch[0]['market'] ?? 'US'));
             $quotes = prices()->quotes([['USDILS=X', 'FX'], [$symbol, $market]], $fresh);
             $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
             $quote = $quotes[Prices::key($symbol, $market)];
             $alerts = array_filter(
-                $repo->alertRules($uid),
+                $rules,
                 fn($r) => in_array($symbol, array_map(fn($v) => strtoupper((string) $v), $r['config']), true)
             );
 
             $byPortfolio = [];
-            $orders = [];
             foreach ($symTrades as $t) {
                 $byPortfolio[$t['portfolio_id']]['name'] ??= $t['portfolio_name'];
                 $byPortfolio[$t['portfolio_id']]['trades'][] = $t;
-            }
-            foreach ($repo->pendingOrders($uid) as $o) {
-                if (strtoupper($o['symbol']) === $symbol) {
-                    $orders[] = $o;
-                }
             }
             foreach ($byPortfolio as &$r) {
                 $pnl = Calc::symbolPnl($r['trades'], $symbol, $quote);
