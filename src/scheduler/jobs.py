@@ -40,6 +40,7 @@ from src.portfolio.corporate_actions import find_active_holdings
 from src.market.splits import split_already_applied
 from src.market.prices import PriceProvider
 from src.portfolio.calculator import PortfolioCalculator
+from src.portfolio.commission import calc_trade_commission
 from src.portfolio.formatter import HTML, format_daily_report, format_monthly_report
 from src.portfolio.allocation import compute_allocation
 from src.portfolio.benchmark import compute_benchmark_comparison
@@ -74,6 +75,13 @@ class BotScheduler:
             "interval",
             minutes=MIN_ALERT_CHECK_MINUTES,
             id="alert_check",
+            replace_existing=True,
+        )
+        self.scheduler.add_job(
+            self._check_pending_orders,
+            "interval",
+            minutes=MIN_ALERT_CHECK_MINUTES,
+            id="pending_orders",
             replace_existing=True,
         )
         self.scheduler.add_job(
@@ -370,6 +378,77 @@ class BotScheduler:
                     portfolio.id,
                     exc,
                 )
+
+    async def _check_pending_orders(self) -> None:
+        """Execute open limit orders whose trigger was crossed by one cent, expire stale ones.
+
+        Mirrors the web app's process_orders: a buy fills at limit when the live price drops a
+        cent below it, a sell when it rises a cent above. Only orders on an exchange that is
+        open today are evaluated.
+        """
+        now = datetime.now(pytz.timezone(TIMEZONE))
+        today = now.date().isoformat()
+        for user in await self.repo.get_all_users():
+            orders = await self.repo.get_open_orders(user.telegram_id)
+            if not orders:
+                continue
+            t = self.i18n.load(user.language)
+            for order in orders:
+                try:
+                    if order.expires_on < today:
+                        if await self.repo.resolve_pending_order(order.id, "expired"):
+                            await self.bot.send_message(
+                                user.telegram_id,
+                                f"⏰ {t['order_expired']}\n"
+                                f"{order.id}: {t[order.action]} {order.quantity:g} {order.symbol} @ {order.limit_price:g}",
+                            )
+                        continue
+                    if not is_market_open(now, order.market):
+                        continue
+                    quote = await self.prices.get_quote(order.symbol, order.market)
+                    if not quote:
+                        continue
+                    px = quote.price
+                    hit = px <= order.limit_price - 0.01 if order.action == "buy" else px >= order.limit_price + 0.01
+                    if not hit:
+                        continue
+                    if order.action == "sell":
+                        holdings = await self.repo.get_holdings(order.portfolio_id)
+                        held = next(
+                            (h for h in holdings if h.symbol == order.symbol and h.market == order.market),
+                            None,
+                        )
+                        if not held or held.quantity + 1e-9 < order.quantity:
+                            continue
+                    portfolio = await self.repo.get_portfolio(order.portfolio_id, user.telegram_id)
+                    if not portfolio:
+                        continue
+                    commission = calc_trade_commission(
+                        portfolio, order.quantity, order.limit_price, order.currency
+                    )
+                    trade = await self.repo.add_trade(
+                        order.portfolio_id,
+                        order.symbol,
+                        order.market,
+                        "stock",
+                        order.action,
+                        order.quantity,
+                        order.limit_price,
+                        order.currency,
+                        commission,
+                        f"הוראת לימיט #{order.id} (ציטוט {px:g} בעת ההפעלה)",
+                    )
+                    if not await self.repo.resolve_pending_order(order.id, "executed", trade.id):
+                        await self.repo.delete_trade(trade.id, user.telegram_id)
+                        continue
+                    await self.bot.send_message(
+                        user.telegram_id,
+                        f"✅ {t['order_executed']}\n"
+                        f"{t[order.action]} {order.quantity:g} {order.symbol} @ {order.limit_price:g} {order.currency}\n"
+                        f"{portfolio.name} · {t.get('trade', 'עסקה')} #{trade.id}",
+                    )
+                except Exception:
+                    logger.exception("Pending order %s check failed", order.id)
 
     async def _check_alerts(self) -> None:
         now = datetime.now(pytz.timezone(TIMEZONE))

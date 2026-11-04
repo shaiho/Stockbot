@@ -9,7 +9,7 @@ from typing import Any
 import aiosqlite
 
 from src.config import DATABASE_PATH, DATABASE_URL, MAX_PORTFOLIOS_PER_USER
-from src.db.models import AdminDbStats, AlertRule, Holding, Portfolio, Trade, User, WatchlistItem
+from src.db.models import AdminDbStats, AlertRule, Holding, PendingOrder, Portfolio, Trade, User, WatchlistItem
 
 try:
     import asyncpg
@@ -1138,6 +1138,40 @@ class Repository:
             await db.execute(self._sql(query, False), args)
             await db.commit()
 
+    async def get_open_orders(self, user_id: int) -> list[PendingOrder]:
+        query = "SELECT * FROM pending_orders WHERE user_id = ? AND status = 'open' ORDER BY id"
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(self._sql(query, True), user_id)
+                return [self._row_to_pending_order(r) for r in rows]
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            rows = await (
+                await db.execute(self._sql(query, False), (user_id,))
+            ).fetchall()
+            return [self._row_to_pending_order(r) for r in rows]
+
+    async def resolve_pending_order(self, order_id: int, status: str, trade_id: int | None = None) -> bool:
+        """Flip an open order to a terminal status. False when already resolved (e.g. by the web app)."""
+        now_sql = "NOW()" if self._postgres else "datetime('now')"
+        query = (
+            f"UPDATE pending_orders SET status = ?, resolved_at = {now_sql}, executed_trade_id = ? "
+            "WHERE id = ? AND status = 'open'"
+        )
+        args = (status, trade_id, order_id)
+        if self._postgres:
+            assert self._pool is not None
+            async with self._pool.acquire() as conn:
+                result = await conn.execute(self._sql(query, True), *args)
+                return result.endswith("1")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(self._sql(query, False), args)
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def _get_portfolio_raw(self, portfolio_id: int) -> Mapping[str, Any] | None:
         query = "SELECT * FROM portfolios WHERE id = ?"
         if self._postgres:
@@ -1196,6 +1230,23 @@ class Repository:
             commission=row["commission"],
             timestamp=Repository._text(row["timestamp"]),
             note=row["note"],
+        )
+
+    @staticmethod
+    def _row_to_pending_order(row: Mapping[str, Any]) -> PendingOrder:
+        return PendingOrder(
+            id=row["id"],
+            user_id=row["user_id"],
+            portfolio_id=row["portfolio_id"],
+            symbol=row["symbol"],
+            market=row["market"],
+            action=row["action"],
+            quantity=row["quantity"],
+            limit_price=row["limit_price"],
+            currency=row["currency"],
+            expires_on=str(row["expires_on"]),
+            status=row["status"],
+            executed_trade_id=row["executed_trade_id"],
         )
 
     @staticmethod

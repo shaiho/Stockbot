@@ -117,6 +117,8 @@
   "morning_report": "Morning report",
   "evening_report": "Evening report",
   "alert_triggered": "Alert",
+  "order_executed": "Limit order executed",
+  "order_expired": "Limit order expired",
   "settings_saved": "Settings saved.",
   "help_text": "Use the menu buttons. For portfolio actions — pick a portfolio first.",
   "alerts_empty": "No alerts configured.",

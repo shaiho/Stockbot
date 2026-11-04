@@ -87,6 +87,22 @@ class AdminDbStats:
 
 
 @dataclass
+class PendingOrder:
+    id: int
+    user_id: int
+    portfolio_id: int
+    symbol: str
+    market: str
+    action: str
+    quantity: float
+    limit_price: float
+    currency: str
+    expires_on: str
+    status: str
+    executed_trade_id: int | None = None
+
+
+@dataclass
 class AlertRule:
     id: int
     user_id: int
