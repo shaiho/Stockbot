@@ -13,9 +13,11 @@ function summaries(array $portfolios, bool $fresh = false): array
     $quotes = prices()->quotes($pairs, $fresh);
     $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
     $out = [];
+    $t0 = microtime(true);
     foreach ($portfolios as $p) {
         $out[$p['id']] = ['trades' => $tradesBy[$p['id']], 'sum' => Calc::summary($p, $tradesBy[$p['id']], $quotes, $fx)];
     }
+    prof_add('calc', (microtime(true) - $t0) * 1000, count($portfolios));
     return [$out, $quotes];
 }
 
@@ -36,6 +38,7 @@ function process_orders(int $uid): void
     $_SESSION['orders_checked'] = time();
     $repo = repo();
     $today = Calc::today();
+    $t0 = microtime(true);
     $repo->expireOrders($uid, $today);
     $open = $repo->openOrders($uid);
     if (!$open) {
@@ -71,6 +74,7 @@ function process_orders(int $uid): void
         $repo->resolveOrder($o['id'], 'executed', $tid);
         flash('ok', sprintf('הוראה #%d בוצעה: %s %s %s במחיר %s', $o['id'], $o['action'] === 'buy' ? 'קניית' : 'מכירת', qty($o['quantity']), $o['symbol'], money($o['limit_price'], $o['currency'])));
     }
+    prof_add('orders', (microtime(true) - $t0) * 1000);
 }
 
 function handle_page(string $page): never

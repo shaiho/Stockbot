@@ -125,16 +125,21 @@ final class Repo
         }
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $rows = $this->run("SELECT * FROM trades WHERE portfolio_id IN ($marks) ORDER BY timestamp, id", array_values($ids))->fetchAll();
+        $t0 = microtime(true);
         foreach ($rows as $r) {
             $byId[(int) $r['portfolio_id']][] = $this->hydrateTrade($r);
         }
+        prof_add('hydrate', (microtime(true) - $t0) * 1000, count($rows));
         return $byId;
     }
 
     public function trades(int $portfolioId): array
     {
         $rows = $this->run('SELECT * FROM trades WHERE portfolio_id = ? ORDER BY timestamp, id', [$portfolioId])->fetchAll();
-        return array_map([$this, 'hydrateTrade'], $rows);
+        $t0 = microtime(true);
+        $out = array_map([$this, 'hydrateTrade'], $rows);
+        prof_add('hydrate', (microtime(true) - $t0) * 1000, count($rows));
+        return $out;
     }
 
     /** Stock trades for one symbol across all of the user's portfolios; each row gains portfolio_name. */

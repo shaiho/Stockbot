@@ -192,9 +192,11 @@ function render(string $view, array $vars = [], string $title = ''): never
 {
     extract($vars);
     $flashes = take_flash();
+    $t0 = microtime(true);
     ob_start();
     require WEB_ROOT . '/views/' . $view . '.php';
     $content = ob_get_clean();
+    prof_add('render', (microtime(true) - $t0) * 1000);
     $prof = prof_report();
     require WEB_ROOT . '/views/layout.php';
     exit;
