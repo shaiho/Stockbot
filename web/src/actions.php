@@ -228,6 +228,52 @@ function handle_action(string $a): never
             flash('ok', $kind === 'deposit' ? 'ההפקדה נשמרה' : 'המשיכה נשמרה');
             redirect($to);
 
+        case 'order_add':
+            $p = owned_portfolio((int) ($_POST['portfolio_id'] ?? 0));
+            $action = $_POST['action_type'] ?? '';
+            if (!in_array($action, ['buy', 'sell'], true)) {
+                fail('פעולה לא תקינה', '?p=orders');
+            }
+            $trades = $repo->trades($p['id']);
+            $holdings = Calc::holdings($trades);
+            $sym = strtoupper(trim((string) ($_POST['symbol'] ?? '')));
+            $sym = str_ends_with($sym, '.TA') ? substr($sym, 0, -3) : $sym;
+            $heldMarkets = array_column(array_filter($holdings, fn($h) => strtoupper($h['symbol']) === $sym), 'market');
+            try {
+                [$symbol, $market] = parse_symbol((string) ($_POST['symbol'] ?? ''), (string) ($_POST['market'] ?? ''), $action === 'sell' ? $heldMarkets : []);
+            } catch (DomainException $e) {
+                fail($e->getMessage(), '?p=orders');
+            }
+            $quantity = num($_POST['quantity'] ?? '');
+            $price = num($_POST['price'] ?? '');
+            $expires = trim((string) ($_POST['expires'] ?? ''));
+            if ($quantity === null || $quantity <= 0 || $price === null || $price <= 0) {
+                fail('כמות/מחיר לא תקינים', '?p=orders');
+            }
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expires) || !strtotime($expires) || $expires < Calc::today()) {
+                fail('תאריך פקיעה לא תקין (חייב להיות היום או בעתיד)', '?p=orders');
+            }
+            if ($action === 'sell') {
+                $held = array_values(array_filter($holdings, fn($h) => $h['symbol'] === $symbol && $h['market'] === $market));
+                if (!$held || $held[0]['quantity'] + 1e-9 < $quantity) {
+                    fail('אין מספיק יחידות למכירה', '?p=orders');
+                }
+            } else {
+                $known = array_filter($trades, fn($t) => $t['symbol'] === $symbol && $t['market'] === $market);
+                if (!$known && !quote_exists($symbol, $market)) {
+                    fail('הסימול לא נמצא בשוק ' . $market, '?p=orders');
+                }
+            }
+            $id = $repo->addOrder($uid, $p['id'], $symbol, $market, $action, $quantity, $price, $market === 'IL' ? 'ILS' : 'USD', $expires);
+            flash('ok', sprintf('הוראה #%d נפתחה: %s %s %s במחיר %s, בתוקף עד %s', $id, $action === 'buy' ? 'קניית' : 'מכירת', qty($quantity), $symbol, $price, $expires));
+            redirect('?p=orders');
+
+        case 'order_cancel':
+            if ($repo->cancelOrder((int) ($_POST['order_id'] ?? 0), $uid)) {
+                flash('ok', 'ההוראה בוטלה');
+            }
+            redirect('?p=orders');
+
         case 'trade_update':
             $trade = $repo->trade((int) ($_POST['trade_id'] ?? 0), $uid);
             if (!$trade) {

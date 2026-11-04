@@ -68,7 +68,25 @@ CREATE TABLE IF NOT EXISTS alert_state (
     UNIQUE(user_id, alert_key)
 );
 
+CREATE TABLE IF NOT EXISTS pending_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL,
+    action TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    limit_price REAL NOT NULL,
+    currency TEXT NOT NULL,
+    expires_on TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    executed_trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_trades_portfolio ON trades(portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_portfolios_user ON portfolios(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_alert_rules_user ON alert_rules(user_id);
+CREATE INDEX IF NOT EXISTS idx_pending_orders_user ON pending_orders(user_id);

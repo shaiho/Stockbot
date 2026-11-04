@@ -27,6 +27,48 @@ function priced_at(array $quotes): ?int
     return $ts ? (int) min($ts) : null;
 }
 
+/** Expire stale limit orders and execute triggered ones against fresh quotes. Runs on every page load. */
+function process_orders(int $uid): void
+{
+    $repo = repo();
+    $today = Calc::today();
+    $repo->expireOrders($uid, $today);
+    $open = $repo->openOrders($uid);
+    if (!$open) {
+        return;
+    }
+    $quotes = prices()->quotes(array_map(fn($o) => [$o['symbol'], $o['market']], $open), true);
+    foreach ($open as $o) {
+        $q = $quotes[Prices::key($o['symbol'], $o['market'])] ?? null;
+        if (!$q) {
+            continue;
+        }
+        $px = $q['price'];
+        $hit = $o['action'] === 'buy' ? $px <= $o['limit_price'] - 0.01 : $px >= $o['limit_price'] + 0.01;
+        if (!$hit) {
+            continue;
+        }
+        if ($o['action'] === 'sell') {
+            $held = array_values(array_filter(
+                Calc::holdings($repo->trades($o['portfolio_id'])),
+                fn($h) => strtoupper($h['symbol']) === strtoupper($o['symbol']) && $h['market'] === $o['market']
+            ));
+            if (!$held || $held[0]['quantity'] + 1e-9 < $o['quantity']) {
+                continue;
+            }
+        }
+        $p = $repo->portfolio($o['portfolio_id'], $uid);
+        if (!$p) {
+            continue;
+        }
+        $commission = Calc::commission($p, $o['quantity'], $o['limit_price'], $o['currency']);
+        $note = sprintf('הוראת לימיט #%d (ציטוט %s בעת ההפעלה)', $o['id'], rtrim(rtrim(number_format($px, 4, '.', ''), '0'), '.'));
+        $tid = $repo->addTrade($o['portfolio_id'], $o['symbol'], $o['market'], 'stock', $o['action'], $o['quantity'], $o['limit_price'], $o['currency'], $commission, $note, null);
+        $repo->resolveOrder($o['id'], 'executed', $tid);
+        flash('ok', sprintf('הוראה #%d בוצעה: %s %s %s במחיר %s', $o['id'], $o['action'] === 'buy' ? 'קניית' : 'מכירת', qty($o['quantity']), $o['symbol'], money($o['limit_price'], $o['currency'])));
+    }
+}
+
 function handle_page(string $page): never
 {
     if ($page === 'login') {
@@ -39,6 +81,7 @@ function handle_page(string $page): never
     $uid = current_user_id();
     $repo = repo();
     $fresh = ($_GET['refresh'] ?? '') === '1';
+    process_orders($uid);
 
     switch ($page) {
         case 'portfolio':
@@ -65,9 +108,15 @@ function handle_page(string $page): never
             );
 
             $byPortfolio = [];
+            $orders = [];
             foreach ($symTrades as $t) {
                 $byPortfolio[$t['portfolio_id']]['name'] ??= $t['portfolio_name'];
                 $byPortfolio[$t['portfolio_id']]['trades'][] = $t;
+            }
+            foreach ($repo->pendingOrders($uid) as $o) {
+                if (strtoupper($o['symbol']) === $symbol) {
+                    $orders[] = $o;
+                }
             }
             foreach ($byPortfolio as &$r) {
                 $pnl = Calc::symbolPnl($r['trades'], $symbol, $quote);
@@ -82,9 +131,12 @@ function handle_page(string $page): never
             unset($r);
             render('symbol', [
                 'symbol' => $symbol, 'market' => $market, 'quote' => $quote, 'fx' => $fx,
-                'byPortfolio' => $byPortfolio, 'watch' => $watch, 'alerts' => $alerts,
+                'byPortfolio' => $byPortfolio, 'watch' => $watch, 'alerts' => $alerts, 'orders' => $orders,
                 'pricedAt' => priced_at($quotes),
             ], $symbol);
+
+        case 'orders':
+            render('orders', ['orders' => $repo->pendingOrders($uid), 'portfolios' => $repo->portfolios($uid)], 'הוראות');
 
         case 'trade':
             $trade = $repo->trade((int) ($_GET['id'] ?? 0), $uid);

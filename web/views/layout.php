@@ -13,6 +13,7 @@
   <nav>
     <a href="?p=dashboard">תיקים</a>
     <a href="?p=watchlist">מעקב</a>
+    <a href="?p=orders">הוראות</a>
     <a href="?p=alerts">התראות</a>
     <a href="?p=settings">הגדרות</a>
   </nav>

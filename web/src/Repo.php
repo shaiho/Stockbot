@@ -256,6 +256,66 @@ final class Repo
         $this->run('DELETE FROM alert_rules WHERE id = ? AND user_id = ?', [$id, $userId]);
     }
 
+    public function pendingOrders(int $userId): array
+    {
+        $rows = $this->run(
+            'SELECT o.*, p.name AS portfolio_name FROM pending_orders o JOIN portfolios p ON p.id = o.portfolio_id
+             WHERE o.user_id = ? ORDER BY o.status = ? DESC, o.id DESC',
+            [$userId, 'open']
+        )->fetchAll();
+        return array_map([$this, 'hydrateOrder'], $rows);
+    }
+
+    public function openOrders(int $userId): array
+    {
+        $rows = $this->run('SELECT * FROM pending_orders WHERE user_id = ? AND status = ? ORDER BY id', [$userId, 'open'])->fetchAll();
+        return array_map([$this, 'hydrateOrder'], $rows);
+    }
+
+    public function addOrder(int $userId, int $portfolioId, string $symbol, string $market, string $action, float $qty, float $price, string $currency, string $expiresOn): int
+    {
+        return (int) $this->run(
+            'INSERT INTO pending_orders (user_id, portfolio_id, symbol, market, action, quantity, limit_price, currency, expires_on)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+            [$userId, $portfolioId, strtoupper($symbol), $market, $action, $qty, $price, $currency, $expiresOn]
+        )->fetchColumn();
+    }
+
+    public function cancelOrder(int $id, int $userId): bool
+    {
+        return $this->run("UPDATE pending_orders SET status = 'cancelled', resolved_at = NOW() WHERE id = ? AND user_id = ? AND status = 'open'", [$id, $userId])->rowCount() > 0;
+    }
+
+    /** Marks orders whose expiry date passed. Returns count. */
+    public function expireOrders(int $userId, string $today): int
+    {
+        return $this->run("UPDATE pending_orders SET status = 'expired', resolved_at = NOW() WHERE user_id = ? AND status = 'open' AND expires_on < ?", [$userId, $today])->rowCount();
+    }
+
+    public function resolveOrder(int $id, string $status, ?int $tradeId): void
+    {
+        $this->run("UPDATE pending_orders SET status = ?, resolved_at = NOW(), executed_trade_id = ? WHERE id = ? AND status = 'open'", [$status, $tradeId, $id]);
+    }
+
+    private function hydrateOrder(array $r): array
+    {
+        return [
+            'id' => (int) $r['id'],
+            'user_id' => (int) $r['user_id'],
+            'portfolio_id' => (int) $r['portfolio_id'],
+            'portfolio_name' => $r['portfolio_name'] ?? null,
+            'symbol' => $r['symbol'],
+            'market' => $r['market'],
+            'action' => $r['action'],
+            'quantity' => (float) $r['quantity'],
+            'limit_price' => (float) $r['limit_price'],
+            'currency' => $r['currency'],
+            'expires_on' => (string) $r['expires_on'],
+            'status' => $r['status'],
+            'executed_trade_id' => $r['executed_trade_id'] === null ? null : (int) $r['executed_trade_id'],
+        ];
+    }
+
     private function hydrateUser(array $r): array
     {
         return [
