@@ -23,11 +23,11 @@ $pid = $p['id'];
     <p class="muted">אין החזקות פתוחות.</p>
   <?php else: ?>
   <div class="scroll"><table>
-    <thead><tr><th>סימול</th><th>כמות</th><th>עלות ממוצעת</th><th>מחיר</th><th>יומי %</th><th>שינוי יומי</th><th>שווי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th></tr></thead>
+    <thead><tr><th>סימול</th><th>כמות</th><th>עלות ממוצעת</th><th>מחיר</th><th>יומי %</th><th>שינוי יומי</th><th>שווי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($sum['holdings'] as $r): $c = $r['currency']; ?>
       <tr>
-        <td><b><?= h($r['symbol']) ?></b> <small class="muted"><?= h($r['market']) ?></small></td>
+        <td><a href="?p=symbol&symbol=<?= h($r['symbol']) ?>&market=<?= h($r['market']) ?>"><b><?= h($r['symbol']) ?></b></a> <small class="muted"><?= h($r['market']) ?></small></td>
         <td><?= qty($r['quantity']) ?></td>
         <td><?= money($r['avg_cost'], $c) ?></td>
         <td><?= $r['price'] === null ? '<span class="neg">אין מחיר</span>' : money($r['price'], $c) . session_badge($r['session']) ?></td>
@@ -38,6 +38,7 @@ $pid = $p['id'];
         <td class="<?= tone($r['unrealized_pct']) ?>"><?= pct($r['unrealized_pct']) ?></td>
         <td class="<?= tone($r['realized']) ?>"><?= money($r['realized'], $c, true) ?></td>
         <td><?= money($r['commissions'], $c) ?></td>
+        <td><button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="עסקה מהירה">+</button></td>
       </tr>
     <?php endforeach; ?>
     </tbody>
@@ -46,7 +47,7 @@ $pid = $p['id'];
   <?php if ($sum['closed']): ?>
     <p class="muted">פוזיציות סגורות:
     <?php foreach ($sum['closed'] as $r): ?>
-      <span class="chip <?= tone($r['realized']) ?>"><?= h($r['symbol']) ?> <?= money($r['realized'], $r['currency'], true) ?></span>
+      <a class="chip <?= tone($r['realized']) ?>" href="?p=symbol&symbol=<?= h($r['symbol']) ?>"><?= h($r['symbol']) ?> <?= money($r['realized'], $r['currency'], true) ?></a>
     <?php endforeach; ?></p>
   <?php endif; ?>
 </section>
@@ -148,7 +149,33 @@ $pid = $p['id'];
   </div>
 </section>
 
+<div id="qt-overlay" class="overlay" hidden>
+  <form class="card form" method="post" action="?a=trade_add">
+    <h2>עסקה מהירה — <span id="qt-title"></span></h2>
+    <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
+    <input type="hidden" name="symbol"><input type="hidden" name="market">
+    <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
+    <label>כמות <input name="quantity" inputmode="decimal" required></label>
+    <label>מחיר ליחידה <input name="price" id="qt-price" inputmode="decimal" required></label>
+    <label>עמלה (ריק = אוטומטי) <input name="commission" inputmode="decimal"></label>
+    <label>הערה <input name="note" maxlength="200"></label>
+    <button class="primary">שמור עסקה</button> <button type="button" id="qt-cancel">ביטול</button>
+  </form>
+</div>
+
 <script>
+const ov = document.getElementById('qt-overlay');
+document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('qt-title').textContent = b.dataset.symbol + ' · ' + b.dataset.market;
+  ov.querySelector('[name=symbol]').value = b.dataset.symbol;
+  ov.querySelector('[name=market]').value = b.dataset.market;
+  document.getElementById('qt-price').value = b.dataset.price;
+  ov.hidden = false;
+  ov.querySelector('[name=quantity]').focus();
+}));
+document.getElementById('qt-cancel').addEventListener('click', () => { ov.hidden = true; });
+ov.addEventListener('click', e => { if (e.target === ov) ov.hidden = true; });
+
 const act = document.getElementById('act');
 act.addEventListener('change', () => {
   const div = act.value === 'dividend';

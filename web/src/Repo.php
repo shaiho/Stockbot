@@ -120,6 +120,21 @@ final class Repo
         return array_map([$this, 'hydrateTrade'], $rows);
     }
 
+    /** Stock trades for one symbol across all of the user's portfolios; each row gains portfolio_name. */
+    public function tradesBySymbol(int $userId, string $symbol): array
+    {
+        $rows = $this->run(
+            'SELECT t.*, p.name AS portfolio_name FROM trades t JOIN portfolios p ON p.id = t.portfolio_id
+             WHERE p.user_id = ? AND t.asset_type <> ? AND UPPER(t.symbol) = ? ORDER BY t.timestamp, t.id',
+            [$userId, 'cash', strtoupper($symbol)]
+        )->fetchAll();
+        return array_map(function (array $r): array {
+            $t = $this->hydrateTrade($r);
+            $t['portfolio_name'] = $r['portfolio_name'];
+            return $t;
+        }, $rows);
+    }
+
     public function trade(int $id, int $userId): ?array
     {
         $row = $this->run(

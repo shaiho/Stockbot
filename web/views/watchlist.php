@@ -9,7 +9,7 @@
   <tbody>
   <?php foreach ($items as $i): $q = $quotes[Prices::key($i['symbol'], $i['market'])] ?? null; $c = $i['market'] === 'IL' ? 'ILS' : 'USD'; ?>
     <tr>
-      <td><b><?= h($i['symbol']) ?></b></td>
+      <td><a href="?p=symbol&symbol=<?= h($i['symbol']) ?>&market=<?= h($i['market']) ?>"><b><?= h($i['symbol']) ?></b></a></td>
       <td><?= h($i['market']) ?></td>
       <td><?= $q ? money($q['price'], $c) . session_badge($q['session'] ?? null) : '—' ?></td>
       <td class="<?= tone($q['change_pct'] ?? null) ?>"><?= $q ? pct($q['change_pct']) : '—' ?></td>

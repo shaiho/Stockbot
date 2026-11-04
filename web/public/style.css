@@ -72,3 +72,6 @@ section { margin-bottom: 1rem; }
 .btn:hover { border-color: var(--accent); text-decoration: none; }
 label.inline { flex-direction: row; align-items: center; gap: .35rem; }
 .badge { padding: 0 .4rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 1rem; }
+.overlay[hidden] { display: none; }
+.overlay .card { width: 100%; max-width: 22rem; }

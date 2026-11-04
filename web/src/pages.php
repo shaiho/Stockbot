@@ -47,6 +47,45 @@ function handle_page(string $page): never
             $all = $data[$p['id']];
             render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'pricedAt' => priced_at($quotes)], $p['name']);
 
+        case 'symbol':
+            $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+            if (!preg_match('/^[A-Z0-9.\-^=]{1,20}$/', $symbol)) {
+                fail('סימול לא תקין', '?p=dashboard');
+            }
+            $symTrades = $repo->tradesBySymbol($uid, $symbol);
+            $watch = array_values(array_filter($repo->watchlist($uid), fn($w) => strtoupper($w['symbol']) === $symbol));
+            $market = in_array($_GET['market'] ?? '', ['US', 'IL'], true) ? $_GET['market']
+                : ($symTrades[0]['market'] ?? ($watch[0]['market'] ?? 'US'));
+            $quotes = prices()->quotes([['USDILS=X', 'FX'], [$symbol, $market]], $fresh);
+            $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
+            $quote = $quotes[Prices::key($symbol, $market)];
+            $alerts = array_filter(
+                $repo->alertRules($uid),
+                fn($r) => in_array($symbol, array_map(fn($v) => strtoupper((string) $v), $r['config']), true)
+            );
+
+            $byPortfolio = [];
+            foreach ($symTrades as $t) {
+                $byPortfolio[$t['portfolio_id']]['name'] ??= $t['portfolio_name'];
+                $byPortfolio[$t['portfolio_id']]['trades'][] = $t;
+            }
+            foreach ($byPortfolio as &$r) {
+                $pnl = Calc::symbolPnl($r['trades'], $symbol, $quote);
+                $daily = Calc::symbolDaily($r['trades'], $quote, Calc::today());
+                $pnl['daily'] = $daily[0] ?? null;
+                if ($daily && $daily[1] !== null) {
+                    $pnl['change_pct'] = $daily[1];
+                }
+                $pnl['unrealized_pct'] = $quote && $pnl['avg_cost'] > 0 ? ($quote['price'] - $pnl['avg_cost']) / $pnl['avg_cost'] * 100 : null;
+                $r['pnl'] = $pnl;
+            }
+            unset($r);
+            render('symbol', [
+                'symbol' => $symbol, 'market' => $market, 'quote' => $quote, 'fx' => $fx,
+                'byPortfolio' => $byPortfolio, 'watch' => $watch, 'alerts' => $alerts,
+                'pricedAt' => priced_at($quotes),
+            ], $symbol);
+
         case 'trade':
             $trade = $repo->trade((int) ($_GET['id'] ?? 0), $uid);
             if (!$trade) {
