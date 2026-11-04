@@ -59,6 +59,23 @@ final class Repo
         return $row ? $this->hydratePortfolio($row) : null;
     }
 
+    /** One round trip: [list<portfolio>, map<portfolio_id, list<trade>>] for a user. */
+    public function portfoliosWithTrades(int $userId): array
+    {
+        $row = $this->run(
+            "SELECT (SELECT coalesce(json_agg(p ORDER BY id), '[]') FROM portfolios p WHERE p.user_id = ?) AS portfolios,
+                    (SELECT coalesce(json_agg(t ORDER BY t.portfolio_id, t.timestamp, t.id), '[]') FROM trades t
+                     JOIN portfolios p2 ON p2.id = t.portfolio_id WHERE p2.user_id = ?) AS trades",
+            [$userId, $userId]
+        )->fetch();
+        $portfolios = array_map([$this, 'hydratePortfolio'], json_decode((string) $row['portfolios'], true) ?: []);
+        $tradesBy = [];
+        foreach (json_decode((string) $row['trades'], true) ?: [] as $t) {
+            $tradesBy[(int) $t['portfolio_id']][] = $this->hydrateTrade($t);
+        }
+        return [$portfolios, $tradesBy];
+    }
+
     /** @throws DomainException 'max_portfolios' | 'duplicate_name' */
     public function createPortfolio(int $userId, string $name, float $ils, float $usd): array
     {

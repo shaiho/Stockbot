@@ -2,10 +2,9 @@
 declare(strict_types=1);
 
 /** @return array{0: array<int, array>, 1: array<string, array|null>} [per-portfolio data, quotes] */
-function summaries(array $portfolios, bool $fresh = false): array
+function summaries(array $portfolios, bool $fresh = false, ?array $tradesBy = null): array
 {
-    $repo = repo();
-    $tradesBy = $repo->tradesForPortfolios(array_column($portfolios, 'id'));
+    $tradesBy ??= repo()->tradesForPortfolios(array_column($portfolios, 'id'));
     $pairs = [['USDILS=X', 'FX']];
     foreach ($portfolios as $p) {
         array_push($pairs, ...Calc::quotePairs($tradesBy[$p['id']]));
@@ -93,8 +92,13 @@ function handle_page(string $page): never
 
     switch ($page) {
         case 'portfolio':
-            $p = owned_portfolio((int) ($_GET['id'] ?? 0));
-            [$data, $quotes] = summaries([$p], $fresh);
+            [$ports, $tradesBy] = $repo->portfoliosWithTrades($uid);
+            $id = (int) ($_GET['id'] ?? 0);
+            $p = array_values(array_filter($ports, fn($x) => $x['id'] === $id))[0] ?? null;
+            if (!$p) {
+                fail('התיק לא נמצא', '?p=dashboard');
+            }
+            [$data, $quotes] = summaries([$p], $fresh, $tradesBy);
             $all = $data[$p['id']];
             render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'pricedAt' => priced_at($quotes)], $p['name']);
 
@@ -166,8 +170,8 @@ function handle_page(string $page): never
 
         case 'dashboard':
         default:
-            $portfolios = $repo->portfolios($uid);
-            [$data, $quotes] = $portfolios ? summaries($portfolios, $fresh) : [[], []];
+            [$portfolios, $tradesBy] = $repo->portfoliosWithTrades($uid);
+            [$data, $quotes] = $portfolios ? summaries($portfolios, $fresh, $tradesBy) : [[], []];
             render('dashboard', ['portfolios' => $portfolios, 'data' => $data, 'pricedAt' => priced_at($quotes)], 'תיקים');
     }
 }
