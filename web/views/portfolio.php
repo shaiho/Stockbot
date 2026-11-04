@@ -30,7 +30,7 @@ $pid = $p['id'];
         <td><b><?= h($r['symbol']) ?></b> <small class="muted"><?= h($r['market']) ?></small></td>
         <td><?= qty($r['quantity']) ?></td>
         <td><?= money($r['avg_cost'], $c) ?></td>
-        <td><?= $r['price'] === null ? '<span class="neg">אין מחיר</span>' : money($r['price'], $c) ?></td>
+        <td><?= $r['price'] === null ? '<span class="neg">אין מחיר</span>' : money($r['price'], $c) . session_badge($r['session']) ?></td>
         <td class="<?= tone($r['change_pct']) ?>"><?= pct($r['change_pct']) ?></td>
         <td class="<?= tone($r['daily']) ?>"><?= $r['daily'] === null ? '—' : money($r['daily'], $c, true) ?></td>
         <td><?= $r['value'] === null ? '—' : money($r['value'], $c) ?></td>

@@ -30,6 +30,12 @@ function pct(?float $v): string
     return $v === null ? '—' : sprintf('%+.2f%%', $v);
 }
 
+function session_badge(?string $session): string
+{
+    $label = ['pre' => 'פרה-מרקט', 'post' => 'אפטר-מרקט', 'closed' => 'סגור'][$session] ?? null;
+    return $label ? ' <small class="badge">' . $label . '</small>' : '';
+}
+
 function tone(?float $v): string
 {
     return $v === null || abs($v) < 0.005 ? '' : ($v > 0 ? 'pos' : 'neg');

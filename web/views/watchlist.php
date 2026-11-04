@@ -11,7 +11,7 @@
     <tr>
       <td><b><?= h($i['symbol']) ?></b></td>
       <td><?= h($i['market']) ?></td>
-      <td><?= $q ? money($q['price'], $c) : '—' ?></td>
+      <td><?= $q ? money($q['price'], $c) . session_badge($q['session'] ?? null) : '—' ?></td>
       <td class="<?= tone($q['change_pct'] ?? null) ?>"><?= $q ? pct($q['change_pct']) : '—' ?></td>
       <td class="actions"><form method="post" action="?a=watch_remove"><?= csrf_field() ?><input type="hidden" name="id" value="<?= $i['id'] ?>"><button class="link danger">הסר</button></form></td>
     </tr>

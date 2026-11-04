@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/** Quotes: Finnhub for US when a key exists, Yahoo chart API otherwise / for IL (.TA) / for FX. File-cached. */
+/** Quotes from the Yahoo chart API (US incl. pre/post market, IL as .TA, FX); Finnhub is the US fallback. File-cached. */
 final class Prices
 {
     private const UA = 'Mozilla/5.0 (compatible; StockbotWeb/1.0)';
@@ -44,24 +44,21 @@ final class Prices
             return $out;
         }
 
-        $useFinnhub = (bool) $this->finnhubKey;
         $first = [];
         foreach ($missing as $k => [$symbol, $market]) {
-            $first[$k] = $useFinnhub && $market === 'US' ? $this->finnhubUrl($symbol) : $this->yahooUrl($symbol, $market);
+            $first[$k] = $this->yahooUrl($symbol, $market);
         }
         $bodies = $this->multiGet($first);
         $retry = [];
         foreach ($missing as $k => [$symbol, $market]) {
-            $viaFinnhub = $useFinnhub && $market === 'US';
-            $q = $this->parse($bodies[$k] ?? null, $viaFinnhub);
-            if ($q === null && $viaFinnhub) {
-                $retry[$k] = $this->yahooUrl($symbol, $market);
+            $out[$k] = $this->parseYahoo($bodies[$k] ?? null, $market === 'US');
+            if ($out[$k] === null && $market === 'US' && $this->finnhubKey) {
+                $retry[$k] = $this->finnhubUrl($symbol);
             }
-            $out[$k] = $q;
         }
         if ($retry) {
             foreach ($this->multiGet($retry) as $k => $body) {
-                $out[$k] = $this->parse($body, false);
+                $out[$k] = $this->parseFinnhub($body);
             }
         }
         foreach ($missing as $k => $_) {
@@ -84,30 +81,55 @@ final class Prices
         if ($market === 'IL' && !str_ends_with($symbol, '.TA')) {
             $symbol .= '.TA';
         }
-        return 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol) . '?range=1d&interval=1d';
+        $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol);
+        return $market === 'US' ? $url . '?range=1d&interval=1m&includePrePost=true' : $url . '?range=1d&interval=1d';
     }
 
-    private function parse(?string $body, bool $finnhub): ?array
+    private function quote(float $price, ?float $prev, array $extra = []): array
+    {
+        return ['price' => $price, 'prev_close' => $prev, 'change_pct' => $prev ? ($price - $prev) / $prev * 100 : 0.0, 'ts' => time()] + $extra;
+    }
+
+    private function parseFinnhub(?string $body): ?array
     {
         $j = $body ? json_decode($body, true) : null;
-        if (!is_array($j)) {
+        $price = is_array($j) ? (float) ($j['c'] ?? 0) : 0.0;
+        return $price > 0 ? $this->quote($price, (float) ($j['pc'] ?? 0) ?: null) : null;
+    }
+
+    /**
+     * US quotes use the 1-minute series with pre/post market, so the price is the latest trade in any session.
+     * Previous close follows the bot: before the regular session opens it is the last regular close.
+     */
+    private function parseYahoo(?string $body, bool $extended): ?array
+    {
+        $j = $body ? json_decode($body, true) : null;
+        $res = $j['chart']['result'][0] ?? null;
+        $meta = $res['meta'] ?? null;
+        $regular = (float) ($meta['regularMarketPrice'] ?? 0);
+        if (!$meta || $regular <= 0) {
             return null;
         }
-        if ($finnhub) {
-            $price = (float) ($j['c'] ?? 0);
-            if ($price <= 0) {
-                return null;
-            }
-            $prev = (float) ($j['pc'] ?? 0) ?: null;
-        } else {
-            $meta = $j['chart']['result'][0]['meta'] ?? null;
-            $price = (float) ($meta['regularMarketPrice'] ?? 0);
-            if (!$meta || $price <= 0) {
-                return null;
-            }
-            $prev = (float) ($meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0) ?: null;
+        $prev = (float) ($meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0) ?: null;
+        if (!$extended) {
+            return $this->quote($regular, $prev);
         }
-        return ['price' => $price, 'prev_close' => $prev, 'change_pct' => $prev ? ($price - $prev) / $prev * 100 : 0.0, 'ts' => time()];
+
+        $price = $regular;
+        foreach (array_reverse($res['indicators']['quote'][0]['close'] ?? []) as $c) {
+            if ($c !== null && $c > 0) {
+                $price = (float) $c;
+                break;
+            }
+        }
+        $now = time();
+        $tp = $meta['currentTradingPeriod'] ?? [];
+        $in = fn(string $s) => isset($tp[$s]['start'], $tp[$s]['end']) && $now >= $tp[$s]['start'] && $now < $tp[$s]['end'];
+        $session = $in('regular') ? 'regular' : ($in('pre') ? 'pre' : ($in('post') ? 'post' : 'closed'));
+        if (isset($tp['regular']['start']) && $now < $tp['regular']['start']) {
+            $prev = $regular;
+        }
+        return $this->quote($price, $prev, ['session' => $session, 'regular_price' => $regular]);
     }
 
     private function cached(string $key, bool $stale = false): ?array

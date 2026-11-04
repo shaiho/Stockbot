@@ -276,6 +276,7 @@ final class Calc
                 $pnl['change_pct'] = $daily[1];
             }
             $pnl['market'] = $h['market'];
+            $pnl['session'] = $q['session'] ?? null;
             $pnl['value'] = $q ? $pnl['quantity'] * $q['price'] : null;
             $pnl['unrealized_pct'] = $q && $pnl['avg_cost'] > 0 ? ($q['price'] - $pnl['avg_cost']) / $pnl['avg_cost'] * 100 : null;
             $rows[$sym] = $pnl;
