@@ -25,6 +25,7 @@
   <div class="flash <?= h($type) ?>"><?= h($msg) ?></div>
 <?php endforeach; ?>
 <?= $content ?>
+<?= $prof ?? '' ?>
 </main>
 <script>
 document.querySelectorAll('form[data-confirm]').forEach(f =>

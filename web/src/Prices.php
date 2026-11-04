@@ -48,7 +48,9 @@ final class Prices
         foreach ($missing as $k => [$symbol, $market]) {
             $first[$k] = $this->yahooUrl($symbol, $market);
         }
+        $t0 = microtime(true);
         $bodies = $this->multiGet($first);
+        prof_add('quotes', (microtime(true) - $t0) * 1000, count($first));
         $retry = [];
         foreach ($missing as $k => [$symbol, $market]) {
             $out[$k] = $this->parseYahoo($bodies[$k] ?? null, $market === 'US');

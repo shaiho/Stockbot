@@ -23,10 +23,13 @@ final class Db
                 ltrim($p['path'] ?? '/postgres', '/'),
                 str_contains($url, 'supabase') ? 'require' : 'prefer'
             );
+            $t0 = microtime(true);
             self::$pdo = new PDO($dsn, urldecode($p['user'] ?? ''), urldecode($p['pass'] ?? ''), [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_PERSISTENT => true,
             ]);
+            prof_add('db_connect', (microtime(true) - $t0) * 1000);
             self::$pdo->exec("SET TIME ZONE 'UTC'");
         }
         return self::$pdo;

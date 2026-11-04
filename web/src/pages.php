@@ -5,10 +5,9 @@ declare(strict_types=1);
 function summaries(array $portfolios, bool $fresh = false): array
 {
     $repo = repo();
-    $tradesBy = [];
+    $tradesBy = $repo->tradesForPortfolios(array_column($portfolios, 'id'));
     $pairs = [['USDILS=X', 'FX']];
     foreach ($portfolios as $p) {
-        $tradesBy[$p['id']] = $repo->trades($p['id']);
         array_push($pairs, ...Calc::quotePairs($tradesBy[$p['id']]));
     }
     $quotes = prices()->quotes($pairs, $fresh);
@@ -30,6 +29,11 @@ function priced_at(array $quotes): ?int
 /** Expire stale limit orders and execute triggered ones against fresh quotes. Runs on every page load. */
 function process_orders(int $uid): void
 {
+    // The bot sweeps every minute too; skip a fresh sweep if this session ran one <30s ago.
+    if (($_SESSION['orders_checked'] ?? 0) > time() - 30) {
+        return;
+    }
+    $_SESSION['orders_checked'] = time();
     $repo = repo();
     $today = Calc::today();
     $repo->expireOrders($uid, $today);

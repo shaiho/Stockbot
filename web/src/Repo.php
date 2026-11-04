@@ -12,11 +12,13 @@ final class Repo
 
     private function run(string $sql, array $args = []): PDOStatement
     {
+        $t0 = microtime(true);
         $st = $this->db->prepare($sql);
         foreach (array_values($args) as $i => $v) {
             $st->bindValue($i + 1, $v, is_bool($v) ? PDO::PARAM_BOOL : (is_int($v) ? PDO::PARAM_INT : (is_null($v) ? PDO::PARAM_NULL : PDO::PARAM_STR)));
         }
         $st->execute();
+        prof_add('db', (microtime(true) - $t0) * 1000);
         return $st;
     }
 
@@ -112,6 +114,21 @@ final class Repo
             'DELETE FROM trades WHERE portfolio_id = ? AND portfolio_id IN (SELECT id FROM portfolios WHERE user_id = ?)',
             [$id, $userId]
         )->rowCount();
+    }
+
+    /** Trades for several portfolios in one query, grouped by portfolio id. */
+    public function tradesForPortfolios(array $ids): array
+    {
+        $byId = array_fill_keys($ids, []);
+        if (!$byId) {
+            return $byId;
+        }
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $rows = $this->run("SELECT * FROM trades WHERE portfolio_id IN ($marks) ORDER BY timestamp, id", array_values($ids))->fetchAll();
+        foreach ($rows as $r) {
+            $byId[(int) $r['portfolio_id']][] = $this->hydrateTrade($r);
+        }
+        return $byId;
     }
 
     public function trades(int $portfolioId): array

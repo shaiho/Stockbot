@@ -168,6 +168,26 @@ function current_user_id(): int
     return (int) $id;
 }
 
+/** Request-scoped profiler: prof_add('db', $ms) accumulates; prof_report() renders a footer line when WEB_DEBUG=1. */
+function prof_add(string $key, float $ms, int $count = 1): void
+{
+    $GLOBALS['prof'][$key][0] = ($GLOBALS['prof'][$key][0] ?? 0) + $ms;
+    $GLOBALS['prof'][$key][1] = ($GLOBALS['prof'][$key][1] ?? 0) + $count;
+}
+
+function prof_report(): string
+{
+    if (!filter_var(env('WEB_DEBUG'), FILTER_VALIDATE_BOOLEAN)) {
+        return '';
+    }
+    $total = (microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true))) * 1000;
+    $parts = ['total ' . round($total) . 'ms'];
+    foreach ($GLOBALS['prof'] ?? [] as $k => [$ms, $n]) {
+        $parts[] = "$k " . round($ms) . "ms" . ($n > 1 ? " ×$n" : '');
+    }
+    return '<footer class="muted" style="margin-top:2rem">' . h(implode(' · ', $parts)) . '</footer>';
+}
+
 function render(string $view, array $vars = [], string $title = ''): never
 {
     extract($vars);
@@ -175,6 +195,7 @@ function render(string $view, array $vars = [], string $title = ''): never
     ob_start();
     require WEB_ROOT . '/views/' . $view . '.php';
     $content = ob_get_clean();
+    $prof = prof_report();
     require WEB_ROOT . '/views/layout.php';
     exit;
 }
