@@ -4,24 +4,7 @@ $actLabels = ['buy' => 'קנייה', 'sell' => 'מכירה'];
 ?>
 <div class="head"><h1>הוראות לביצוע</h1></div>
 
-<p class="muted">ההוראות נבדקות מול המחיר החי בכל טעינת עמוד. קנייה מופעלת כשהמחיר יורד לסנט מתחת ליעד, מכירה כשהוא עולה לסנט מעל היעד — כדי למנוע הפעלה על נגיעה במחיר שלא ממלאה הוראה אמיתית.</p>
-
-<form class="card form" method="post" action="?a=order_add">
-  <h2>הוראה חדשה</h2>
-  <?= csrf_field() ?>
-  <label>תיק
-    <select name="portfolio_id">
-      <?php foreach ($portfolios as $p): ?><option value="<?= $p['id'] ?>"><?= h($p['name']) ?></option><?php endforeach; ?>
-    </select>
-  </label>
-  <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
-  <label>סימול <input name="symbol" required placeholder="AAPL / TEVA.TA"></label>
-  <label>שוק <select name="market"><option value="">אוטומטי</option><option value="US">US</option><option value="IL">IL</option></select></label>
-  <label>כמות <input name="quantity" inputmode="decimal" required></label>
-  <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
-  <label>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>" required></label>
-  <button class="primary">פתח הוראה</button>
-</form>
+<p class="muted">ההוראות נבדקות מול המחיר החי בכל טעינת עמוד ובכל דקה בבוט. קנייה מופעלת כשהמחיר יורד לסנט מתחת ליעד, מכירה כשהוא עולה לסנט מעל היעד — כדי למנוע הפעלה על נגיעה במחיר שלא ממלאה הוראה אמיתית. פתיחת הוראה נעשית מעמוד התיק.</p>
 
 <?php if ($orders): ?>
 <div class="scroll"><table>

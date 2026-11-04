@@ -12,7 +12,12 @@
   let end = 0, timer;
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
-    if (s <= 0) { location.href = box.dataset.url; return; }
+    if (s <= 0) {
+      clearInterval(timer);
+      box.disabled = true;
+      location.href = box.dataset.url;
+      return;
+    }
     count.textContent = 'רענון בעוד ' + s + ' שנ׳';
   };
   const arm = () => {

@@ -38,7 +38,10 @@ $pid = $p['id'];
         <td class="<?= tone($r['unrealized_pct']) ?>"><?= pct($r['unrealized_pct']) ?></td>
         <td class="<?= tone($r['realized']) ?>"><?= money($r['realized'], $c, true) ?></td>
         <td><?= money($r['commissions'], $c) ?></td>
-        <td><button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="עסקה מהירה">+</button></td>
+        <td class="actions">
+          <button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="עסקה מהירה">+</button>
+          <button type="button" class="link quick-order" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="הוראת לימיט">הוראה</button>
+        </td>
       </tr>
     <?php endforeach; ?>
     </tbody>
@@ -82,6 +85,18 @@ $pid = $p['id'];
     <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור</button>
+  </form>
+
+  <form class="card form" method="post" action="?a=order_add">
+    <h2>הוראת לימיט <small class="muted">(<a href="?p=orders">כל ההוראות</a>)</small></h2>
+    <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
+    <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
+    <label>סימול <input name="symbol" required placeholder="AAPL / TEVA.TA"></label>
+    <label>שוק <select name="market"><option value="">אוטומטי</option><option value="US">US</option><option value="IL">IL</option></select></label>
+    <label>כמות <input name="quantity" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
+    <label>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>" required></label>
+    <button class="primary">פתח הוראה</button>
   </form>
 </section>
 
@@ -163,6 +178,19 @@ $pid = $p['id'];
   </form>
 </div>
 
+<div id="qo-overlay" class="overlay" hidden>
+  <form class="card form" method="post" action="?a=order_add">
+    <h2>הוראת לימיט — <span id="qo-title"></span></h2>
+    <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
+    <input type="hidden" name="symbol"><input type="hidden" name="market">
+    <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
+    <label>כמות <input name="quantity" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" id="qo-price" inputmode="decimal" required></label>
+    <label>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>" required></label>
+    <button class="primary">פתח הוראה</button> <button type="button" id="qo-cancel">ביטול</button>
+  </form>
+</div>
+
 <script>
 const ov = document.getElementById('qt-overlay');
 document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click', () => {
@@ -175,6 +203,18 @@ document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click',
 }));
 document.getElementById('qt-cancel').addEventListener('click', () => { ov.hidden = true; });
 ov.addEventListener('click', e => { if (e.target === ov) ov.hidden = true; });
+
+const qo = document.getElementById('qo-overlay');
+document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('qo-title').textContent = b.dataset.symbol + ' · ' + b.dataset.market;
+  qo.querySelector('[name=symbol]').value = b.dataset.symbol;
+  qo.querySelector('[name=market]').value = b.dataset.market;
+  document.getElementById('qo-price').value = b.dataset.price;
+  qo.hidden = false;
+  qo.querySelector('[name=quantity]').focus();
+}));
+document.getElementById('qo-cancel').addEventListener('click', () => { qo.hidden = true; });
+qo.addEventListener('click', e => { if (e.target === qo) qo.hidden = true; });
 
 const act = document.getElementById('act');
 act.addEventListener('change', () => {
