@@ -10,3 +10,5 @@ data/*.db
 .mypy_cache/
 
 web/cache/
+
+data/
