@@ -1172,6 +1172,32 @@ class Repository:
             await db.commit()
             return cursor.rowcount > 0
 
+    async def upsert_portfolio_snapshot(self, portfolio_id: int, day: str, total_ils: float) -> None:
+        """Daily portfolio value point, for the web value-over-time chart."""
+        query = """
+            INSERT INTO portfolio_snapshots (portfolio_id, date, total_ils)
+            VALUES (?, ?, ?)
+            ON CONFLICT (portfolio_id, date) DO UPDATE SET total_ils = excluded.total_ils
+        """
+        args = (portfolio_id, day, total_ils)
+        if self._postgres:
+            assert self._pool is not None
+            from datetime import date as _date
+            async with self._pool.acquire() as conn:
+                await conn.execute(self._sql(query, True), portfolio_id, _date.fromisoformat(day), total_ils)
+            return
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO portfolio_snapshots (portfolio_id, date, total_ils)
+                VALUES (?, ?, ?)
+                ON CONFLICT (portfolio_id, date) DO UPDATE SET total_ils = excluded.total_ils
+                """,
+                args,
+            )
+            await db.commit()
+
     async def _get_portfolio_raw(self, portfolio_id: int) -> Mapping[str, Any] | None:
         query = "SELECT * FROM portfolios WHERE id = ?"
         if self._postgres:

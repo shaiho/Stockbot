@@ -99,6 +99,23 @@ final class Prices
         return $out;
     }
 
+    /** Past-year dividends and splits from Yahoo chart events. @return array{dividends:array,splits:array} */
+    public function events(string $symbol, string $market): array
+    {
+        if ($market === 'IL' && !str_ends_with($symbol, '.TA')) {
+            $symbol .= '.TA';
+        }
+        $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol) . '?range=1y&interval=1d&events=div%2Csplit';
+        $body = $this->multiGet(['x' => $url])['x'] ?? null;
+        $j = $body ? json_decode($body, true) : null;
+        $ev = $j['chart']['result'][0]['events'] ?? [];
+        $fmt = fn(array $e) => array_values(array_map(
+            fn($x) => ['date' => date('Y-m-d', (int) $x['date']), 'amount' => (float) ($x['amount'] ?? 0), 'ratio' => $x['splitRatio'] ?? null],
+            $e ?: []
+        ));
+        return ['dividends' => $fmt($ev['dividends'] ?? []), 'splits' => $fmt($ev['splits'] ?? [])];
+    }
+
     private function finnhubUrl(string $symbol): string
     {
         return 'https://finnhub.io/api/v1/quote?symbol=' . rawurlencode($symbol) . '&token=' . rawurlencode((string) $this->finnhubKey);

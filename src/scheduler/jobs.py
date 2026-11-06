@@ -92,6 +92,14 @@ class BotScheduler:
             replace_existing=True,
         )
         self.scheduler.add_job(
+            self._snapshot_portfolio_values,
+            "cron",
+            hour=23,
+            minute=55,
+            id="portfolio_snapshots",
+            replace_existing=True,
+        )
+        self.scheduler.add_job(
             self._refresh_holiday_calendars,
             "interval",
             days=HOLIDAY_REFRESH_DAYS,
@@ -378,6 +386,25 @@ class BotScheduler:
                     portfolio.id,
                     exc,
                 )
+
+    async def _snapshot_portfolio_values(self) -> None:
+        """Store one daily value point per portfolio for the web value-over-time chart."""
+        today = datetime.now(pytz.timezone(TIMEZONE)).date().isoformat()
+        for user in await self.repo.get_all_users():
+            if not user.onboarding_completed:
+                continue
+            for portfolio in await self.repo.get_portfolios(user.telegram_id):
+                try:
+                    holdings = await self.repo.get_holdings(portfolio.id)
+                    trades = await self.repo.get_trades(portfolio.id)
+                    cash_ils, cash_usd = await self.repo.get_cash_balances(portfolio.id)
+                    summary = await self.calculator.compute_summary(
+                        holdings, trades, cash_ils, cash_usd,
+                        portfolio.opening_cash_ils, portfolio.opening_cash_usd,
+                    )
+                    await self.repo.upsert_portfolio_snapshot(portfolio.id, today, summary.total_ils)
+                except Exception:
+                    logger.exception("Snapshot failed for portfolio %s", portfolio.id)
 
     async def _check_pending_orders(self) -> None:
         """Execute open limit orders whose trigger was crossed by one cent, expire stale ones.

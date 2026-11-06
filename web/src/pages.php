@@ -130,7 +130,7 @@ function handle_page(string $page): never
             }
             [$data, $quotes] = summaries([$p], $fresh, $tradesBy);
             $all = $data[$p['id']];
-            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'pricedAt' => priced_at($quotes)], $p['name']);
+            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'snapshots' => $repo->snapshots($p['id']), 'pricedAt' => priced_at($quotes)], $p['name']);
 
         case 'symbol':
             $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
@@ -168,6 +168,7 @@ function handle_page(string $page): never
             render('symbol', [
                 'symbol' => $symbol, 'market' => $market, 'quote' => $quote, 'fx' => $fx,
                 'byPortfolio' => $byPortfolio, 'watch' => $watch, 'alerts' => $alerts, 'orders' => $orders,
+                'events' => prices()->events($symbol, $market),
                 'pricedAt' => priced_at($quotes),
             ], $symbol);
 

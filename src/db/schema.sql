@@ -85,6 +85,14 @@ CREATE TABLE IF NOT EXISTS pending_orders (
     executed_trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    total_ils REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (portfolio_id, date)
+);
+
 CREATE INDEX IF NOT EXISTS idx_trades_portfolio ON trades(portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_portfolios_user ON portfolios(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);

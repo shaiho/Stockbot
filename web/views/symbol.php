@@ -86,6 +86,20 @@ foreach ($byPortfolio as $r) {
 })();
 </script>
 
+<?php if ($events['dividends'] || $events['splits']): ?>
+<section>
+  <h2>אירועים בשנה האחרונה</h2>
+  <p>
+    <?php foreach (array_reverse($events['dividends']) as $e): ?>
+      <span class="chip">דיבידנד · <?= h($e['date']) ?> · <?= number_format($e['amount'], 4) ?></span>
+    <?php endforeach; ?>
+    <?php foreach (array_reverse($events['splits']) as $e): ?>
+      <span class="chip">פיצול <?= h((string) $e['ratio']) ?> · <?= h($e['date']) ?></span>
+    <?php endforeach; ?>
+  </p>
+</section>
+<?php endif; ?>
+
 <?php if (!$byPortfolio): ?>
   <p class="muted">אין עסקאות על הנייר במערכת.</p>
 <?php endif; ?>

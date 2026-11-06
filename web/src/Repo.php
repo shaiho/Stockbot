@@ -283,6 +283,16 @@ final class Repo
         return $updated;
     }
 
+    /** Daily value snapshots for a portfolio: list of ['date'=>Y-m-d,'total_ils'=>float]. */
+    public function snapshots(int $portfolioId): array
+    {
+        try {
+            return $this->run('SELECT date, total_ils FROM portfolio_snapshots WHERE portfolio_id = ? ORDER BY date', [$portfolioId])->fetchAll();
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
     public function watchlist(int $userId): array
     {
         return $this->run('SELECT * FROM watchlist WHERE user_id = ? ORDER BY symbol', [$userId])->fetchAll();
