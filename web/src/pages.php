@@ -168,6 +168,7 @@ function handle_page(string $page): never
             render('symbol', [
                 'symbol' => $symbol, 'market' => $market, 'quote' => $quote, 'fx' => $fx,
                 'byPortfolio' => $byPortfolio, 'watch' => $watch, 'alerts' => $alerts, 'orders' => $orders,
+                'portfolios' => $repo->portfolios($uid),
                 'events' => prices()->events($symbol, $market),
                 'pricedAt' => priced_at($quotes),
             ], $symbol);

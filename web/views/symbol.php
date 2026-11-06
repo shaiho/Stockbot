@@ -21,6 +21,10 @@ foreach ($byPortfolio as $r) {
   <h1><?= h($symbol) ?> <small class="muted"><?= h($market) ?></small></h1>
   <a href="?p=dashboard">← כל התיקים</a>
 </div>
+<p>
+  <button type="button" class="link" id="open-quick" data-kind="trade_add">+ עסקה</button>
+  <button type="button" class="link" id="open-quick-order" data-kind="order_add">הוראה</button>
+</p>
 <?php require __DIR__ . '/_refresh.php'; ?>
 
 <div class="stats">
@@ -57,6 +61,10 @@ foreach ($byPortfolio as $r) {
 (() => {
   const box = document.getElementById('price-chart');
   const sym = <?= json_encode($symbol) ?>, mkt = <?= json_encode($market) ?>;
+  const trades = <?= json_encode(array_values(array_filter(array_map(
+      fn($t) => in_array($t['action'], ['buy', 'sell'], true)
+          ? ['ts' => $t['ts']->getTimestamp(), 'action' => $t['action'], 'price' => $t['price']]
+          : null, $symTrades)))) ?>;
   const draw = async (range) => {
     box.textContent = 'טוען…';
     const pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
@@ -69,6 +77,14 @@ foreach ($byPortfolio as $r) {
     const path = pts.map((p, i) => (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1)).join(' ');
     const fmt = v => (v >= 100 ? v.toFixed(1) : v.toFixed(2));
     const color = ys[ys.length - 1] >= ys[0] ? '#16a34a' : '#dc2626';
+    let marks = '';
+    trades.forEach(tr => {
+      if (tr.ts < x0 || tr.ts > x1) return;
+      const mx = px(tr.ts), my = py(tr.price);
+      marks += tr.action === 'buy'
+        ? `<path d="M${mx} ${my - 6} l5 8 h-10 Z" fill="#16a34a"/>`
+        : `<path d="M${mx} ${my + 6} l5 -8 h-10 Z" fill="#dc2626"/>`;
+    });
     let grid = '';
     for (let i = 0; i <= 4; i++) {
       const v = y0 + (y1 - y0) * i / 4, y = py(v);
@@ -79,7 +95,7 @@ foreach ($byPortfolio as $r) {
     box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">` + grid +
       `<text x="${W}" y="${H - 14}" font-size="11" fill="#6b7280" text-anchor="end">${fd(d0)}</text>` +
       `<text x="${pad}" y="${H - 14}" font-size="11" fill="#6b7280">${fd(d1)}</text>` +
-      `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+      `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/>` + marks + `</svg>`;
   };
   document.querySelectorAll('.chart-range').forEach(b => b.addEventListener('click', () => draw(b.dataset.range)));
   draw('1mo');
@@ -99,6 +115,38 @@ foreach ($byPortfolio as $r) {
   </p>
 </section>
 <?php endif; ?>
+
+<div id="sq-overlay" class="overlay" hidden>
+  <form class="card form" method="post" id="sq-form">
+    <h2><span id="sq-title"></span> — <?= h($symbol) ?></h2>
+    <?= csrf_field() ?>
+    <input type="hidden" name="symbol" value="<?= h($symbol) ?>">
+    <input type="hidden" name="market" value="<?= h($market) ?>">
+    <label>תיק
+      <select name="portfolio_id"><?php foreach ($portfolios as $pp): ?><option value="<?= $pp['id'] ?>"><?= h($pp['name']) ?></option><?php endforeach; ?></select>
+    </label>
+    <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
+    <label>כמות <input name="quantity" inputmode="decimal" required></label>
+    <label><span id="sq-price-label">מחיר ליחידה</span> <input name="price" inputmode="decimal" value="<?= h((string) ($quote['price'] ?? '')) ?>" required></label>
+    <label id="sq-expires" hidden>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>"></label>
+    <button class="primary">שמור</button> <button type="button" id="sq-cancel">ביטול</button>
+  </form>
+</div>
+<script>
+const sq = document.getElementById('sq-overlay'), sqForm = document.getElementById('sq-form');
+const openSq = (kind) => {
+  document.getElementById('sq-title').textContent = kind === 'order_add' ? 'הוראת לימיט' : 'עסקה מהירה';
+  document.getElementById('sq-price-label').textContent = kind === 'order_add' ? 'מחיר יעד ליחידה' : 'מחיר ליחידה';
+  document.getElementById('sq-expires').hidden = kind !== 'order_add';
+  sqForm.action = '?a=' + kind;
+  sq.hidden = false;
+  sq.querySelector('[name=quantity]').focus();
+};
+document.getElementById('open-quick').addEventListener('click', () => openSq('trade_add'));
+document.getElementById('open-quick-order').addEventListener('click', () => openSq('order_add'));
+document.getElementById('sq-cancel').addEventListener('click', () => { sq.hidden = true; });
+sq.addEventListener('click', e => { if (e.target === sq) sq.hidden = true; });
+</script>
 
 <?php if (!$byPortfolio): ?>
   <p class="muted">אין עסקאות על הנייר במערכת.</p>
