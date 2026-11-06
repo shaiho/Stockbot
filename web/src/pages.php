@@ -155,6 +155,7 @@ function handle_page(string $page): never
             );
 
             $byPortfolio = [];
+            foreach ($symTrades as $t) {
                 $byPortfolio[$t['portfolio_id']]['name'] ??= $t['portfolio_name'];
                 $byPortfolio[$t['portfolio_id']]['trades'][] = $t;
             }
