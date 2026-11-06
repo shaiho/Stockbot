@@ -6,6 +6,14 @@ $alertLabels = [
     'portfolio_value_change' => 'שינוי בשווי התיק (%)', 'daily_loss_limit' => 'הפסד יומי (%)', 'pnl_milestone' => 'יעד רווח/הפסד (₪)',
 ];
 $cur = $market === 'IL' ? 'ILS' : 'USD';
+$tradeMarks = [];
+foreach ($byPortfolio as $r) {
+    foreach ($r['trades'] as $t) {
+        if (in_array($t['action'], ['buy', 'sell'], true)) {
+            $tradeMarks[] = ['ts' => $t['ts']->getTimestamp(), 'action' => $t['action'], 'price' => $t['price']];
+        }
+    }
+}
 $totQty = 0.0;
 $totValue = 0.0;
 $totPnl = 0.0;
@@ -61,10 +69,7 @@ foreach ($byPortfolio as $r) {
 (() => {
   const box = document.getElementById('price-chart');
   const sym = <?= json_encode($symbol) ?>, mkt = <?= json_encode($market) ?>;
-  const trades = <?= json_encode(array_values(array_filter(array_map(
-      fn($t) => in_array($t['action'], ['buy', 'sell'], true)
-          ? ['ts' => $t['ts']->getTimestamp(), 'action' => $t['action'], 'price' => $t['price']]
-          : null, $symTrades)))) ?>;
+  const trades = <?= json_encode($tradeMarks) ?>;
   const draw = async (range) => {
     box.textContent = 'טוען…';
     const pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
