@@ -156,12 +156,14 @@ class PriceProvider:
             if not data or data.get("c") in (None, 0):
                 return None
             live = float(data["c"])
+            prev = float(data.get("pc") or 0) or None
             return Quote(
                 symbol=symbol,
                 market="US",
                 price=live,
-                change_pct=0.0,
+                change_pct=(live - prev) / prev * 100 if prev else 0.0,
                 currency="USD",
+                previous_close=prev,
             )
         except Exception:
             return None
