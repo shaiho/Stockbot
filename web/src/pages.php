@@ -87,6 +87,11 @@ function handle_page(string $page): never
 
     $uid = current_user_id();
     $repo = repo();
+    if ($page === 'order_count') {
+        header('Content-Type: application/json');
+        echo json_encode(['n' => count($repo->openOrders($uid))]);
+        exit;
+    }
     $fresh = ($_GET['refresh'] ?? '') === '1';
     process_orders($uid);
 

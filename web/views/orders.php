@@ -27,6 +27,7 @@ $actLabels = ['buy' => 'קנייה', 'sell' => 'מכירה'];
       </td>
       <td class="actions">
         <?php if ($o['status'] === 'open'): ?>
+          <button type="button" class="link edit-order" data-id="<?= $o['id'] ?>" data-symbol="<?= h($o['symbol']) ?>" data-qty="<?= h((string) $o['quantity']) ?>" data-price="<?= h((string) $o['limit_price']) ?>" data-expires="<?= h($o['expires_on']) ?>">ערוך</button>
           <form method="post" action="?a=order_cancel" data-confirm="לבטל את ההוראה #<?= $o['id'] ?>?"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= $o['id'] ?>"><button class="link danger">בטל</button></form>
         <?php endif; ?>
       </td>
@@ -37,3 +38,27 @@ $actLabels = ['buy' => 'קנייה', 'sell' => 'מכירה'];
 <?php else: ?>
 <p class="muted">אין הוראות.</p>
 <?php endif; ?>
+
+<div id="oe-overlay" class="overlay" hidden>
+  <form class="card form" method="post" action="?a=order_edit">
+    <h2>עריכת הוראה #<span id="oe-title"></span></h2>
+    <?= csrf_field() ?><input type="hidden" name="order_id">
+    <label>כמות <input name="quantity" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
+    <label>בתוקף עד <input type="date" name="expires" min="<?= date('Y-m-d') ?>" required></label>
+    <button class="primary">שמור</button> <button type="button" id="oe-cancel">ביטול</button>
+  </form>
+</div>
+<script>
+const oe = document.getElementById('oe-overlay');
+document.querySelectorAll('.edit-order').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('oe-title').textContent = b.dataset.id + ' · ' + b.dataset.symbol;
+  oe.querySelector('[name=order_id]').value = b.dataset.id;
+  oe.querySelector('[name=quantity]').value = b.dataset.qty;
+  oe.querySelector('[name=price]').value = b.dataset.price;
+  oe.querySelector('[name=expires]').value = b.dataset.expires;
+  oe.hidden = false;
+}));
+document.getElementById('oe-cancel').addEventListener('click', () => { oe.hidden = true; });
+oe.addEventListener('click', e => { if (e.target === oe) oe.hidden = true; });
+</script>

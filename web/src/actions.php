@@ -268,6 +268,23 @@ function handle_action(string $a): never
             flash('ok', sprintf('הוראה #%d נפתחה: %s %s %s במחיר %s, בתוקף עד %s', $id, $action === 'buy' ? 'קניית' : 'מכירת', qty($quantity), $symbol, $price, $expires));
             redirect('?p=orders');
 
+        case 'order_edit':
+            $quantity = num($_POST['quantity'] ?? '');
+            $price = num($_POST['price'] ?? '');
+            $expires = trim((string) ($_POST['expires'] ?? ''));
+            if ($quantity === null || $quantity <= 0 || $price === null || $price <= 0) {
+                fail('כמות/מחיר לא תקינים', '?p=orders');
+            }
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expires) || !strtotime($expires) || $expires < Calc::today()) {
+                fail('תאריך פקיעה לא תקין', '?p=orders');
+            }
+            if ($repo->updateOrder((int) ($_POST['order_id'] ?? 0), $uid, $quantity, $price, $expires)) {
+                flash('ok', 'ההוראה עודכנה');
+            } else {
+                fail('ההוראה לא נמצאה או שאינה פתוחה', '?p=orders');
+            }
+            redirect('?p=orders');
+
         case 'order_cancel':
             if ($repo->cancelOrder((int) ($_POST['order_id'] ?? 0), $uid)) {
                 flash('ok', 'ההוראה בוטלה');

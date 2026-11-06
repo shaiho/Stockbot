@@ -351,6 +351,14 @@ final class Repo
         )->fetchColumn();
     }
 
+    public function updateOrder(int $id, int $userId, float $qty, float $price, string $expiresOn): bool
+    {
+        return $this->run(
+            "UPDATE pending_orders SET quantity = ?, limit_price = ?, expires_on = ? WHERE id = ? AND user_id = ? AND status = 'open'",
+            [$qty, $price, $expiresOn, $id, $userId]
+        )->rowCount() > 0;
+    }
+
     public function cancelOrder(int $id, int $userId): bool
     {
         return $this->run("UPDATE pending_orders SET status = 'cancelled', resolved_at = NOW() WHERE id = ? AND user_id = ? AND status = 'open'", [$id, $userId])->rowCount() > 0;

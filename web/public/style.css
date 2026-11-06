@@ -75,3 +75,5 @@ label.inline { flex-direction: row; align-items: center; gap: .35rem; }
 .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 1rem; }
 .overlay[hidden] { display: none; }
 .overlay .card { width: 100%; max-width: 22rem; }
+.filter { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; }
+.nav-badge { padding: 0 .4rem; border-radius: 999px; background: var(--accent, #2563eb); color: #fff; font-size: .8em; }

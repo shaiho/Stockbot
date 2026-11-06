@@ -102,11 +102,22 @@ $pid = $p['id'];
 
 <section>
   <h2>היסטוריית עסקאות <small class="muted">(<?= count($trades) ?>)</small></h2>
+  <div class="filter muted">
+    סינון: <input id="f-sym" placeholder="סימול" size="8">
+    <select id="f-act">
+      <option value="">כל הפעולות</option>
+      <option value="buy">קנייה</option><option value="sell">מכירה</option><option value="dividend">דיבידנד</option>
+      <option value="deposit">הפקדה</option><option value="withdraw">משיכה</option>
+    </select>
+    <input type="date" id="f-from"> – <input type="date" id="f-to">
+    <button type="button" class="link" id="f-clear">נקה</button>
+    <span id="f-sum"></span>
+  </div>
   <div class="scroll"><table>
     <thead><tr><th>#</th><th>תאריך</th><th>פעולה</th><th>סימול</th><th>כמות</th><th>מחיר</th><th>עמלה</th><th>הערה</th><th></th></tr></thead>
-    <tbody>
+    <tbody id="trades-body">
     <?php foreach ($trades as $t): $cash = $t['asset_type'] === 'cash'; $c = $t['currency']; ?>
-      <tr>
+      <tr data-act="<?= h($t['action']) ?>" data-sym="<?= h($cash ? $c : strtoupper($t['symbol'])) ?>" data-date="<?= h(local_dt($t['ts'], 'Y-m-d')) ?>" data-comm="<?= h((string) $t['commission']) ?>" data-cur="<?= h($c) ?>">
         <td><?= $t['id'] ?></td>
         <td><?= h(local_dt($t['ts'])) ?></td>
         <td><?= h($labels[$t['action']] ?? $t['action']) ?></td>
@@ -124,6 +135,29 @@ $pid = $p['id'];
     </tbody>
   </table></div>
 </section>
+<script>
+(() => {
+  const rows = [...document.querySelectorAll('#trades-body tr')];
+  const sym = document.getElementById('f-sym'), act = document.getElementById('f-act'),
+        from = document.getElementById('f-from'), to = document.getElementById('f-to'),
+        sum = document.getElementById('f-sum');
+  const apply = () => {
+    let n = 0, comms = {};
+    rows.forEach(r => {
+      const ok = (!sym.value || r.dataset.sym.includes(sym.value.toUpperCase()))
+        && (!act.value || r.dataset.act === act.value)
+        && (!from.value || r.dataset.date >= from.value)
+        && (!to.value || r.dataset.date <= to.value);
+      r.hidden = !ok;
+      if (ok) { n++; if (+r.dataset.comm > 0) comms[r.dataset.cur] = (comms[r.dataset.cur] || 0) + +r.dataset.comm; }
+    });
+    const c = Object.entries(comms).map(([k, v]) => v.toFixed(2) + ' ' + (k === 'ILS' ? '₪' : '$')).join(' + ');
+    sum.textContent = (n === rows.length ? '' : n + ' שורות') + (c ? ' · עמלות ' + c : '');
+  };
+  [sym, act, from, to].forEach(el => el.addEventListener('input', apply));
+  document.getElementById('f-clear').addEventListener('click', () => { sym.value = act.value = from.value = to.value = ''; apply(); });
+})();
+</script>
 
 <section>
   <h2>הגדרות תיק</h2>

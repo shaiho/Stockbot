@@ -13,7 +13,7 @@
   <nav>
     <a href="?p=dashboard">תיקים</a>
     <a href="?p=watchlist">מעקב</a>
-    <a href="?p=orders">הוראות</a>
+    <a href="?p=orders">הוראות <span id="orders-badge"></span></a>
     <a href="?p=alerts">התראות</a>
     <a href="?p=settings">הגדרות</a>
   </nav>
@@ -30,6 +30,9 @@
 <script>
 document.querySelectorAll('form[data-confirm]').forEach(f =>
   f.addEventListener('submit', e => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+fetch('?p=order_count').then(r => r.json()).then(d => {
+  if (d.n > 0) document.getElementById('orders-badge').innerHTML = '<span class="nav-badge">' + d.n + '</span>';
+}).catch(() => {});
 </script>
 </body>
 </html>
