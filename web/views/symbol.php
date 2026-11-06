@@ -10,7 +10,7 @@ $tradeMarks = [];
 foreach ($byPortfolio as $r) {
     foreach ($r['trades'] as $t) {
         if (in_array($t['action'], ['buy', 'sell'], true)) {
-            $tradeMarks[] = ['ts' => $t['ts']->getTimestamp(), 'action' => $t['action'], 'price' => $t['price']];
+            $tradeMarks[] = ['ts' => $t['ts']->getTimestamp(), 'action' => $t['action'], 'price' => $t['price'], 'qty' => $t['quantity'], 'date' => local_dt($t['ts'], 'd/m/Y')];
         }
     }
 }
@@ -86,9 +86,10 @@ foreach ($byPortfolio as $r) {
     trades.forEach(tr => {
       if (tr.ts < x0 || tr.ts > x1) return;
       const mx = px(tr.ts), my = py(tr.price);
+      const tip = `${tr.action === 'buy' ? 'קנייה' : 'מכירה'} ${tr.qty} יח׳ @ ${tr.price}\n${tr.date}`;
       marks += tr.action === 'buy'
-        ? `<path d="M${mx} ${my - 6} l5 8 h-10 Z" fill="#16a34a"/>`
-        : `<path d="M${mx} ${my + 6} l5 -8 h-10 Z" fill="#dc2626"/>`;
+        ? `<path d="M${mx} ${my - 6} l5 8 h-10 Z" fill="#16a34a"><title>${tip}</title></path>`
+        : `<path d="M${mx} ${my + 6} l5 -8 h-10 Z" fill="#dc2626"><title>${tip}</title></path>`;
     });
     let grid = '';
     for (let i = 0; i <= 4; i++) {
