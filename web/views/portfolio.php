@@ -47,6 +47,36 @@ $pid = $p['id'];
     </tbody>
   </table></div>
   <?php endif; ?>
+  <?php
+    $alloc = array_values(array_filter($sum['holdings'], fn($r) => $r['value'] !== null && $r['value'] > 0));
+    $totAlloc = array_sum(array_map(fn($r) => $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']), $alloc));
+    if ($totAlloc > 0):
+      $colors = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+      $angle = -90.0; $i = 0; $seg = '';
+      foreach ($alloc as $r) {
+        $v = $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']);
+        $pct = $v / $totAlloc;
+        $a0 = deg2rad($angle); $angle += $pct * 360; $a1 = deg2rad($angle);
+        $large = $pct > 0.5 ? 1 : 0;
+        $x0 = 110 + 80 * cos($a0); $y0 = 110 + 80 * sin($a0);
+        $x1 = 110 + 80 * cos($a1); $y1 = 110 + 80 * sin($a1);
+        $xi1 = 110 + 45 * cos($a1); $yi1 = 110 + 45 * sin($a1);
+        $xi0 = 110 + 45 * cos($a0); $yi0 = 110 + 45 * sin($a0);
+        $seg .= sprintf('<path d="M%.1f %.1f A80 80 0 %d 1 %.1f %.1f L%.1f %.1f A45 45 0 %d 0 %.1f %.1f Z" fill="%s"/>', $x0, $y0, $large, $x1, $y1, $xi1, $yi1, $large, $xi0, $yi0, $colors[$i % count($colors)]);
+        $i++;
+      }
+      $i = 0;
+  ?>
+    <h3>הקצאה</h3>
+    <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap">
+      <svg viewBox="0 0 220 220" style="width:180px;height:180px"><?= $seg ?></svg>
+      <div>
+        <?php foreach ($alloc as $r): $pct = $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']) / $totAlloc * 100; ?>
+          <div><span style="display:inline-block;width:.7rem;height:.7rem;background:<?= $colors[$i++ % count($colors)] ?>;border-radius:2px;margin-left:.4rem"></span><?= h($r['symbol']) ?> — <?= number_format($pct, 1) ?>%</div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  <?php endif; ?>
   <?php if ($sum['closed']): ?>
     <p class="muted">פוזיציות סגורות:
     <?php foreach ($sum['closed'] as $r): ?>
@@ -101,7 +131,7 @@ $pid = $p['id'];
 </section>
 
 <section>
-  <h2>היסטוריית עסקאות <small class="muted">(<?= count($trades) ?>)</small></h2>
+  <h2>היסטוריית עסקאות <small class="muted">(<?= count($trades) ?>)</small> <small><a href="?p=export&id=<?= $pid ?>">ייצוא CSV</a></small></h2>
   <div class="filter muted">
     סינון: <input id="f-sym" placeholder="סימול" size="8">
     <select id="f-act">

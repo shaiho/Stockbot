@@ -43,6 +43,49 @@ foreach ($byPortfolio as $r) {
 </p>
 <?php endif; ?>
 
+<section>
+  <h2>גרף מחיר</h2>
+  <div class="filter muted">
+    <button type="button" class="link chart-range" data-range="1d">יום</button>
+    <button type="button" class="link chart-range" data-range="5d">5 ימים</button>
+    <button type="button" class="link chart-range" data-range="1mo">חודש</button>
+  </div>
+  <div id="price-chart" style="width:100%;max-width:900px"></div>
+</section>
+
+<script>
+(() => {
+  const box = document.getElementById('price-chart');
+  const sym = <?= json_encode($symbol) ?>, mkt = <?= json_encode($market) ?>;
+  const draw = async (range) => {
+    box.textContent = 'טוען…';
+    const pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
+    if (!pts.length) { box.textContent = 'אין נתונים'; return; }
+    const W = 900, H = 260, pad = 40;
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const px = t => pad + (t - x0) / (x1 - x0 || 1) * (W - pad - 10);
+    const py = v => H - 10 - (v - y0) / (y1 - y0 || 1) * (H - pad);
+    const path = pts.map((p, i) => (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1)).join(' ');
+    const fmt = v => (v >= 100 ? v.toFixed(1) : v.toFixed(2));
+    const color = ys[ys.length - 1] >= ys[0] ? '#16a34a' : '#dc2626';
+    let grid = '';
+    for (let i = 0; i <= 4; i++) {
+      const v = y0 + (y1 - y0) * i / 4, y = py(v);
+      grid += `<line x1="${pad}" y1="${y}" x2="${W}" y2="${y}" stroke="#e5e7eb"/><text x="2" y="${y + 4}" font-size="11" fill="#6b7280">${fmt(v)}</text>`;
+    }
+    const d0 = new Date(x0 * 1000), d1 = new Date(x1 * 1000);
+    const fd = d => d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">` + grid +
+      `<text x="${W}" y="${H - 14}" font-size="11" fill="#6b7280" text-anchor="end">${fd(d0)}</text>` +
+      `<text x="${pad}" y="${H - 14}" font-size="11" fill="#6b7280">${fd(d1)}</text>` +
+      `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+  };
+  document.querySelectorAll('.chart-range').forEach(b => b.addEventListener('click', () => draw(b.dataset.range)));
+  draw('1mo');
+})();
+</script>
+
 <?php if (!$byPortfolio): ?>
   <p class="muted">אין עסקאות על הנייר במערכת.</p>
 <?php endif; ?>

@@ -73,6 +73,32 @@ final class Prices
         return $out;
     }
 
+    /** Historical closes for charts: range '1d'|'5d'|'1mo'. @return list<array{0:int,1:float}> [ts, close] */
+    public function chart(string $symbol, string $market, string $range): array
+    {
+        if ($market === 'IL' && !str_ends_with($symbol, '.TA')) {
+            $symbol .= '.TA';
+        }
+        $interval = ['1d' => '5m', '5d' => '30m', '1mo' => '1d'][$range] ?? '1d';
+        $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol)
+            . '?range=' . $range . '&interval=' . $interval . '&includePrePost=' . ($range === '1d' && $market === 'US' ? 'true' : 'false');
+        $body = $this->multiGet(['x' => $url])['x'] ?? null;
+        $j = $body ? json_decode($body, true) : null;
+        $res = $j['chart']['result'][0] ?? null;
+        if (!$res) {
+            return [];
+        }
+        $ts = $res['timestamp'] ?? [];
+        $closes = $res['indicators']['quote'][0]['close'] ?? [];
+        $out = [];
+        foreach ($ts as $i => $t) {
+            if (isset($closes[$i]) && $closes[$i] > 0) {
+                $out[] = [(int) $t, (float) $closes[$i]];
+            }
+        }
+        return $out;
+    }
+
     private function finnhubUrl(string $symbol): string
     {
         return 'https://finnhub.io/api/v1/quote?symbol=' . rawurlencode($symbol) . '&token=' . rawurlencode((string) $this->finnhubKey);

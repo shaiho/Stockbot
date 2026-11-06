@@ -95,6 +95,31 @@ function handle_page(string $page): never
     $fresh = ($_GET['refresh'] ?? '') === '1';
     process_orders($uid);
 
+    if ($page === 'export') {
+        $p = owned_portfolio((int) ($_GET['id'] ?? 0));
+        $trades = $repo->trades($p['id']);
+        $fname = 'trades_' . preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $p['name']) . '_' . date('Y-m-d') . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $fname . '"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['id', 'date', 'action', 'symbol', 'market', 'asset_type', 'quantity', 'price', 'currency', 'commission', 'note']);
+        foreach ($trades as $t) {
+            fputcsv($out, [$t['id'], local_dt($t['ts'], 'Y-m-d H:i'), $t['action'], $t['symbol'], $t['market'], $t['asset_type'], $t['quantity'], $t['price'], $t['currency'], $t['commission'], $t['note']]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    if ($page === 'chart') {
+        $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+        $market = in_array($_GET['market'] ?? '', ['US', 'IL'], true) ? $_GET['market'] : 'US';
+        $range = in_array($_GET['range'] ?? '', ['1d', '5d', '1mo'], true) ? $_GET['range'] : '1mo';
+        header('Content-Type: application/json');
+        echo json_encode(preg_match('/^[A-Z0-9.\-^=]{1,20}$/', $symbol) ? prices()->chart($symbol, $market, $range) : []);
+        exit;
+    }
+
     switch ($page) {
         case 'portfolio':
             [$ports, $tradesBy] = $repo->portfoliosWithTrades($uid);
