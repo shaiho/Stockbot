@@ -58,7 +58,7 @@ function alert_detail(array $r, array $names): string
   <?= csrf_field() ?>
   <label>היקף
     <select name="scope" id="scope">
-      <?php foreach ($scopeLabels as $k => $v): ?><option value="<?= $k ?>"><?= $v ?></option><?php endforeach; ?>
+      <?php foreach ($scopeLabels as $k => $v): ?><option value="<?= $k ?>" <?= ($_GET['symbol'] ?? '') && $k === 'stock' ? 'selected' : '' ?>><?= $v ?></option><?php endforeach; ?>
     </select>
   </label>
   <label>סוג
@@ -69,8 +69,8 @@ function alert_detail(array $r, array $names): string
     </select>
   </label>
   <div data-for="stock watchlist">
-    <label>סימול <input name="symbol" placeholder="AAPL / TEVA.TA"></label>
-    <label>שוק <select name="market"><option value="">אוטומטי</option><option value="US">US</option><option value="IL">IL</option></select></label>
+    <label>סימול <input name="symbol" placeholder="AAPL / TEVA.TA" value="<?= h($_GET['symbol'] ?? '') ?>"></label>
+    <label>שוק <select name="market"><option value="">אוטומטי</option><option value="US" <?= ($_GET['market'] ?? '') === 'US' ? 'selected' : '' ?>>US</option><option value="IL" <?= ($_GET['market'] ?? '') === 'IL' ? 'selected' : '' ?>>IL</option></select></label>
   </div>
   <label data-for="portfolio">תיק
     <select name="portfolio_id"><?php foreach ($portfolios as $p): ?><option value="<?= $p['id'] ?>"><?= h($p['name']) ?></option><?php endforeach; ?></select>

@@ -23,10 +23,14 @@ $pid = $p['id'];
     <p class="muted">אין החזקות פתוחות.</p>
   <?php else: ?>
   <div class="scroll"><table>
-    <thead><tr><th>סימול</th><th>כמות</th><th>עלות ממוצעת</th><th>מחיר</th><th>יומי %</th><th>שינוי יומי</th><th>שווי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th><th></th></tr></thead>
-    <tbody>
+    <thead><tr>
+      <th data-sort="symbol" data-type="t">סימול</th><th data-sort="quantity">כמות</th><th data-sort="avg_cost">עלות ממוצעת</th><th data-sort="price">מחיר</th>
+      <th data-sort="change_pct">יומי %</th><th data-sort="daily">שינוי יומי</th><th data-sort="value" class="sortable">שווי</th>
+      <th data-sort="unrealized">שינוי מקנייה</th><th data-sort="unrealized_pct">שינוי מקנייה %</th><th data-sort="realized">ממומש</th><th data-sort="commissions">עמלות</th><th></th>
+    </tr></thead>
+    <tbody id="holdings-body">
     <?php foreach ($sum['holdings'] as $r): $c = $r['currency']; ?>
-      <tr>
+      <tr data-symbol="<?= h($r['symbol']) ?>" data-quantity="<?= $r['quantity'] ?>" data-avg_cost="<?= $r['avg_cost'] ?>" data-price="<?= (string) ($r['price'] ?? '') ?>" data-change_pct="<?= (string) ($r['change_pct'] ?? '') ?>" data-daily="<?= (string) ($r['daily'] ?? '') ?>" data-value="<?= (string) ($r['value'] ?? '') ?>" data-unrealized="<?= $r['unrealized'] ?>" data-unrealized_pct="<?= (string) ($r['unrealized_pct'] ?? '') ?>" data-realized="<?= $r['realized'] ?>" data-commissions="<?= $r['commissions'] ?>">
         <td><a href="?p=symbol&symbol=<?= h($r['symbol']) ?>&market=<?= h($r['market']) ?>"><b><?= h($r['symbol']) ?></b></a> <small class="muted"><?= h($r['market']) ?></small></td>
         <td><?= qty($r['quantity']) ?></td>
         <td><?= money($r['avg_cost'], $c) ?></td>
@@ -41,6 +45,7 @@ $pid = $p['id'];
         <td class="actions">
           <button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="עסקה מהירה">+</button>
           <button type="button" class="link quick-order" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="הוראת לימיט">הוראה</button>
+          <a href="?p=alerts&symbol=<?= h($r['symbol']) ?>&market=<?= h($r['market']) ?>" title="התראה">התר</a>
         </td>
       </tr>
     <?php endforeach; ?>
@@ -285,6 +290,30 @@ document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click',
 }));
 document.getElementById('qt-cancel').addEventListener('click', () => { ov.hidden = true; });
 ov.addEventListener('click', e => { if (e.target === ov) ov.hidden = true; });
+
+const hb = document.getElementById('holdings-body');
+if (hb) {
+  let sortKey = null, dir = 1;
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      dir = (sortKey === k) ? -dir : 1;
+      sortKey = k;
+      const text = th.textContent.replace(/ [▲▼]$/, '');
+      document.querySelectorAll('th[data-sort]').forEach(t => t.textContent = t.textContent.replace(/ [▲▼]$/, ''));
+      th.textContent = text + (dir > 0 ? ' ▲' : ' ▼');
+      const rows = [...hb.rows];
+      rows.sort((a, b) => {
+        const va = a.dataset[k] ?? '', vb = b.dataset[k] ?? '';
+        if (th.dataset.type === 't') return dir * va.localeCompare(vb);
+        const na = va === '' ? -Infinity : +va, nb = vb === '' ? -Infinity : +vb;
+        return dir * (na - nb);
+      });
+      rows.forEach(r => hb.appendChild(r));
+    });
+  });
+}
 
 const qo = document.getElementById('qo-overlay');
 document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click', () => {

@@ -197,6 +197,10 @@ function handle_page(string $page): never
         default:
             [$portfolios, $tradesBy] = $repo->portfoliosWithTrades($uid);
             [$data, $quotes] = $portfolios ? summaries($portfolios, $fresh, $tradesBy) : [[], []];
-            render('dashboard', ['portfolios' => $portfolios, 'data' => $data, 'pricedAt' => priced_at($quotes)], 'תיקים');
+            render('dashboard', [
+                'portfolios' => $portfolios, 'data' => $data,
+                'snapshots' => $repo->snapshotsSum(array_column($portfolios, 'id')),
+                'pricedAt' => priced_at($quotes),
+            ], 'תיקים');
     }
 }

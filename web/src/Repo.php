@@ -293,6 +293,20 @@ final class Repo
         }
     }
 
+    /** Daily total value summed across portfolios: list of ['date'=>Y-m-d,'total_ils'=>float]. */
+    public function snapshotsSum(array $portfolioIds): array
+    {
+        if (!$portfolioIds) {
+            return [];
+        }
+        try {
+            $marks = implode(',', array_fill(0, count($portfolioIds), '?'));
+            return $this->run("SELECT date, SUM(total_ils) AS total_ils FROM portfolio_snapshots WHERE portfolio_id IN ($marks) GROUP BY date ORDER BY date", array_values($portfolioIds))->fetchAll();
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
     public function watchlist(int $userId): array
     {
         return $this->run('SELECT * FROM watchlist WHERE user_id = ? ORDER BY symbol', [$userId])->fetchAll();
