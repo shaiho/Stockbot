@@ -268,6 +268,17 @@ function handle_action(string $a): never
             flash('ok', sprintf('הוראה #%d נפתחה: %s %s %s במחיר %s, בתוקף עד %s', $id, $action === 'buy' ? 'קניית' : 'מכירת', qty($quantity), $symbol, $price, $expires));
             redirect('?p=orders');
 
+        case 'fx_set':
+            $v = num($_POST['fx'] ?? '');
+            if ($v !== null && $v > 0) {
+                $_SESSION['fx_manual'] = $v;
+                flash('ok', 'שער ידני הוגדר: ' . $v);
+            } else {
+                unset($_SESSION['fx_manual']);
+                flash('ok', 'שער ידני בוטל — חוזרים לשער החי');
+            }
+            redirect((string) ($_POST['back'] ?? '?p=dashboard'));
+
         case 'order_edit':
             $quantity = num($_POST['quantity'] ?? '');
             $price = num($_POST['price'] ?? '');

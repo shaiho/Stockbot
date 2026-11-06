@@ -140,6 +140,17 @@ $pid = $p['id'];
     <button class="primary">שמור</button>
   </form>
 
+  <div class="card form">
+    <h2>מחשבון פוזיציה</h2>
+    <label>סכום <input id="pc-amount" inputmode="decimal"></label>
+    <label>מחיר ליחידה <input id="pc-price" inputmode="decimal"></label>
+    <label>מטבע <select id="pc-cur"><option value="USD">$ USD</option><option value="ILS">₪ ILS</option></select></label>
+    <p class="muted" id="pc-out">יחידות: —</p>
+    <hr>
+    <p class="muted small">כמות קיימת <input id="pc-qty" inputmode="decimal" size="6"> עלות ממוצעת <input id="pc-avg" inputmode="decimal" size="8"></p>
+    <p class="muted" id="pc-avg-out">עלות חדשה: —</p>
+  </div>
+
   <form class="card form" method="post" action="?a=order_add">
     <h2>הוראת לימיט <small class="muted">(<a href="?p=orders">כל ההוראות</a>)</small></h2>
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
@@ -326,6 +337,18 @@ document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click
 }));
 document.getElementById('qo-cancel').addEventListener('click', () => { qo.hidden = true; });
 qo.addEventListener('click', e => { if (e.target === qo) qo.hidden = true; });
+
+const FX = <?= json_encode($sum['fx']) ?>;
+const pcIn = ['pc-amount','pc-price','pc-cur','pc-qty','pc-avg'].map(id => document.getElementById(id));
+const pcCalc = () => {
+  const amt = +pcIn[0].value, pr = +pcIn[1].value;
+  const ils = pcIn[2].value === 'ILS' ? amt : amt * FX;
+  document.getElementById('pc-out').textContent = 'יחידות: ' + (amt > 0 && pr > 0 ? (ils / FX / pr).toFixed(2) : '—');
+  const q0 = +pcIn[3].value, a0 = +pcIn[4].value;
+  const newQty = q0 + (ils / FX / pr);
+  document.getElementById('pc-avg-out').textContent = 'עלות חדשה: ' + (newQty > 0 && pr > 0 ? ((q0 * a0 + (ils / FX)) / newQty).toFixed(4) : '—');
+};
+pcIn.forEach(el => { el.addEventListener('input', pcCalc); el.addEventListener('change', pcCalc); });
 
 const act = document.getElementById('act');
 act.addEventListener('change', () => {

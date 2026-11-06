@@ -4,6 +4,11 @@
   <a class="btn" href="<?= h($refreshUrl) ?>">רענן עכשיו</a>
   <label class="inline"><input type="checkbox" id="auto-refresh" data-url="<?= h($refreshUrl) ?>"> רענון אוטומטי כל 30 שניות</label>
   <span id="refresh-count"></span>
+  <form method="post" action="?a=fx_set" class="inline" style="display:inline-flex;gap:.3rem;align-items:center">
+    <?= csrf_field() ?><input type="hidden" name="back" value="<?= h($_SERVER['REQUEST_URI'] ?? '?p=dashboard') ?>">
+    שער: <input name="fx" inputmode="decimal" size="6" placeholder="auto" value="<?= h((string) ($_SESSION['fx_manual'] ?? '')) ?>">
+    <button class="link"><?= !empty($_SESSION['fx_manual']) ? 'בטל ידני' : 'הגדר' ?></button>
+  </form>
 </div>
 <script>
 (() => {

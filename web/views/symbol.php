@@ -156,7 +156,7 @@ sq.addEventListener('click', e => { if (e.target === sq) sq.hidden = true; });
 <section>
   <h2><a href="?p=portfolio&id=<?= $pid ?>"><?= h($r['name']) ?></a></h2>
   <div class="scroll"><table>
-    <thead><tr><th>כמות</th><th>עלות ממוצעת</th><th>שווי</th><th>שינוי יומי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th></tr></thead>
+    <thead><tr><th>כמות</th><th>עלות ממוצעת</th><th>שווי</th><th>שינוי יומי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th><th>דיבידנדים</th></tr></thead>
     <tbody><tr>
       <td><?= qty($pnl['quantity']) ?></td>
       <td><?= $pnl['avg_cost'] > 0 ? money($pnl['avg_cost'], $c) : '—' ?></td>
@@ -166,6 +166,13 @@ sq.addEventListener('click', e => { if (e.target === sq) sq.hidden = true; });
       <td class="<?= tone($pnl['unrealized_pct']) ?>"><?= pct($pnl['unrealized_pct']) ?></td>
       <td class="<?= tone($pnl['realized']) ?>"><?= money($pnl['realized'], $c, true) ?></td>
       <td><?= money($pnl['commissions'], $c) ?></td>
+      <td>
+        <?php if ($pnl['div_count']): ?>
+          <?= money($pnl['div_total'], $c) ?>
+          <?php if ($pnl['div_yield_cost'] !== null): ?>(<?= number_format($pnl['div_yield_cost'], 1) ?>% על עלות)<?php endif; ?>
+          <br><small class="muted"><?= $pnl['div_count'] ?> חלוקות<?php if ($pnl['div_last']): ?> · אחרון <?= h($pnl['div_last']['date']) ?> · <?= money($pnl['div_last']['amount'], $c) ?> על <?= qty($pnl['div_last']['qty']) ?> יח'<?php endif; ?></small>
+        <?php else: ?>—<?php endif; ?>
+      </td>
     </tr></tbody>
   </table></div>
 

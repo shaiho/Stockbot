@@ -11,6 +11,11 @@ function summaries(array $portfolios, bool $fresh = false, ?array $tradesBy = nu
     }
     $quotes = prices()->quotes($pairs, $fresh);
     $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
+    $manual = (float) ($_SESSION['fx_manual'] ?? 0);
+    if ($manual > 0) {
+        $fx = $manual;
+        $quotes[Prices::key('USDILS=X', 'FX')] = ['price' => $manual, 'prev_close' => null, 'change_pct' => 0.0, 'ts' => time(), 'manual' => true];
+    }
     $out = [];
     $t0 = microtime(true);
     foreach ($portfolios as $p) {
@@ -150,7 +155,6 @@ function handle_page(string $page): never
             );
 
             $byPortfolio = [];
-            foreach ($symTrades as $t) {
                 $byPortfolio[$t['portfolio_id']]['name'] ??= $t['portfolio_name'];
                 $byPortfolio[$t['portfolio_id']]['trades'][] = $t;
             }
@@ -162,6 +166,23 @@ function handle_page(string $page): never
                     $pnl['change_pct'] = $daily[1];
                 }
                 $pnl['unrealized_pct'] = $quote && $pnl['avg_cost'] > 0 ? ($quote['price'] - $pnl['avg_cost']) / $pnl['avg_cost'] * 100 : null;
+                // Dividend stats: total received, per-share average using qty actually held on each date.
+                $qty = 0.0; $divTotal = 0.0; $divCount = 0; $divLast = null;
+                foreach ($r['trades'] as $t) {
+                    if ($t['action'] === 'buy') { $qty += $t['quantity']; }
+                    elseif ($t['action'] === 'sell') { $qty -= $t['quantity']; }
+                    elseif ($t['action'] === 'dividend') {
+                        $amt = $t['quantity'] * $t['price'];
+                        $divTotal += $amt;
+                        $divCount++;
+                        $divLast = ['date' => Calc::localDate($t), 'amount' => $amt, 'qty' => max($qty, 0.0)];
+                    }
+                }
+                $cost = $pnl['quantity'] * $pnl['avg_cost'];
+                $pnl['div_total'] = $divTotal;
+                $pnl['div_count'] = $divCount;
+                $pnl['div_last'] = $divLast;
+                $pnl['div_yield_cost'] = $cost > 0 && $divTotal > 0 ? $divTotal / $cost * 100 : null;
                 $r['pnl'] = $pnl;
             }
             unset($r);
