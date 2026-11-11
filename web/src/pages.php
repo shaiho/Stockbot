@@ -7,7 +7,7 @@ function summaries(array $portfolios, bool $fresh = false, ?array $tradesBy = nu
     $tradesBy ??= repo()->tradesForPortfolios(array_column($portfolios, 'id'));
     $pairs = [['USDILS=X', 'FX']];
     foreach ($portfolios as $p) {
-        array_push($pairs, ...Calc::quotePairs($tradesBy[$p['id']]));
+        array_push($pairs, ...Calc::quotePairs($tradesBy[$p['id']] ?? []));
     }
     $quotes = prices()->quotes($pairs, $fresh);
     $fx = $quotes[Prices::key('USDILS=X', 'FX')]['price'] ?? 3.7;
@@ -19,7 +19,7 @@ function summaries(array $portfolios, bool $fresh = false, ?array $tradesBy = nu
     $out = [];
     $t0 = microtime(true);
     foreach ($portfolios as $p) {
-        $out[$p['id']] = ['trades' => $tradesBy[$p['id']], 'sum' => Calc::summary($p, $tradesBy[$p['id']], $quotes, $fx)];
+        $out[$p['id']] = ['trades' => $tradesBy[$p['id']] ?? [], 'sum' => Calc::summary($p, $tradesBy[$p['id']] ?? [], $quotes, $fx)];
     }
     prof_add('calc', (microtime(true) - $t0) * 1000, count($portfolios));
     return [$out, $quotes];
