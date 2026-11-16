@@ -270,7 +270,7 @@ final class Calc
                 $pnl['unrealized'] = $q ? ($q['price'] - $h['avg_cost']) * $h['quantity'] : 0.0;
             }
             $symTrades = array_values(array_filter($trades, fn($t) => $t['asset_type'] !== 'cash' && strtoupper($t['symbol']) === $sym));
-            $daily = self::symbolDaily($symTrades, $q, self::today());
+            $daily = self::symbolDaily($symTrades, $q, $q['trade_date'] ?? self::today());
             $pnl['daily'] = $daily[0] ?? null;
             if ($daily && $daily[1] !== null) {
                 $pnl['change_pct'] = $daily[1];
@@ -324,8 +324,17 @@ final class Calc
                 $amt = self::toIls($t['quantity'], $t['currency'], $fx);
                 $flow += $t['action'] === 'deposit' ? $amt : ($t['action'] === 'withdraw' ? -$amt : 0.0);
             }
-            if ($date >= $today) {
-                continue;
+            if ($t['asset_type'] === 'cash') {
+                if ($date >= $today) {
+                    continue;
+                }
+            } else {
+                // Stock trades are baselined against the session's trading date, not local midnight:
+                // overnight (local date past close, before next pre-market) the session is still "today".
+                $session = $quotes[Prices::key($t['symbol'], $t['market'])]['trade_date'] ?? $today;
+                if ($date >= $session) {
+                    continue;
+                }
             }
             $cur = $t['currency'] === 'ILS' ? 'ILS' : 'USD';
             $gross = $t['quantity'] * $t['price'];

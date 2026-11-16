@@ -156,19 +156,14 @@ final class Prices
             return null;
         }
         $prev = (float) ($meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0) ?: null;
-        // Once the local calendar day rolls past the quote's trading day (e.g. Israel midnight while
-        // the US is still in post-market), the baseline for daily change is the last regular close,
-        // not the still-stale previousClose of the day before it.
         $tp = $meta['currentTradingPeriod'] ?? [];
+        $extra = [];
         if (isset($tp['regular']['start'])) {
             $tz = new DateTimeZone($meta['exchangeTimezoneName'] ?? 'UTC');
-            $tradeDate = (new DateTimeImmutable('@' . $tp['regular']['start']))->setTimezone($tz)->format('Y-m-d');
-            if ($tradeDate < date('Y-m-d')) {
-                $prev = $regular;
-            }
+            $extra['trade_date'] = (new DateTimeImmutable('@' . $tp['regular']['start']))->setTimezone($tz)->format('Y-m-d');
         }
         if (!$extended) {
-            return $this->quote($regular, $prev);
+            return $this->quote($regular, $prev, $extra);
         }
 
         $price = $regular;
@@ -184,7 +179,7 @@ final class Prices
         if (isset($tp['regular']['start']) && $now < $tp['regular']['start']) {
             $prev = $regular;
         }
-        return $this->quote($price, $prev, ['session' => $session, 'regular_price' => $regular]);
+        return $this->quote($price, $prev, ['session' => $session, 'regular_price' => $regular] + $extra);
     }
 
     private function cached(string $key, bool $stale = false): ?array
