@@ -34,6 +34,7 @@ from src.portfolio.formatter import (
     format_monthly_report,
     format_portfolio_summary,
     format_portfolio_summary_parts,
+    format_portfolio_summary_rich,
     format_quote,
     format_stock_pnl,
     format_tax_report,
@@ -177,21 +178,37 @@ async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
         subtitle=t["portfolio_summary"],
         subtitle_emoji="📊",
     )
-    text_parts = format_portfolio_summary_parts(
-        summary,
-        portfolio.name,
-        t,
-        period=period,
-        allocation=allocation,
-        benchmark=benchmark,
-    )
-    if edit:
-        await message.edit_text(text_parts[0], parse_mode=HTML)
-        for part in text_parts[1:]:
-            await message.answer(part, parse_mode=HTML)
-    else:
-        for part in text_parts:
-            await message.answer(part, parse_mode=HTML)
+    try:
+        blocks = format_portfolio_summary_rich(
+            summary,
+            portfolio.name,
+            t,
+            period=period,
+            allocation=allocation,
+            benchmark=benchmark,
+        )
+        await send_rich(message.bot, message.chat.id, blocks)
+        if edit:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+    except Exception:
+        text_parts = format_portfolio_summary_parts(
+            summary,
+            portfolio.name,
+            t,
+            period=period,
+            allocation=allocation,
+            benchmark=benchmark,
+        )
+        if edit:
+            await message.edit_text(text_parts[0], parse_mode=HTML)
+            for part in text_parts[1:]:
+                await message.answer(part, parse_mode=HTML)
+        else:
+            for part in text_parts:
+                await message.answer(part, parse_mode=HTML)
 
     today = datetime.now().date()
     await send_pending_split_prompts(

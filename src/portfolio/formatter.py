@@ -203,6 +203,85 @@ def format_portfolio_summary_parts(
     )
 
 
+def format_portfolio_summary_rich(
+    summary: PortfolioSummary,
+    portfolio_name: str,
+    t: dict,
+    *,
+    period: PeriodReturns | None = None,
+    allocation: AllocationBreakdown | None = None,
+    benchmark: BenchmarkComparison | None = None,
+) -> list:
+    """Portfolio summary as rich blocks: heading + stats + native tables for daily/per-symbol P&L."""
+    from src.bot.rich import heading, pre, table
+
+    fx = summary.fx_rate
+    lines = [
+        f"{t['total_value']}: ₪{summary.total_ils:,.0f} | ${summary.total_usd:,.2f}",
+        f"{t['daily_change']}: {fmt_dual_ils_usd(summary.daily_change_ils, fx, show_plus=True)}",
+        f"{t['total_pnl']}: {fmt_dual_ils_usd(summary.total_pnl_ils, fx, show_plus=True)} ({fmt_pct(summary.total_pnl_pct)})",
+        f"{t['investments_pnl']}: {fmt_dual_ils_usd(summary.investments_pnl_ils, fx, show_plus=True)}",
+    ]
+    if period:
+        lines.append(
+            f"{t['ytd_realized']}: {fmt_dual_ils_usd(period.ytd_realized_ils, fx, show_plus=True)} "
+            f"({period.ytd_trade_count} {t['trades']})"
+        )
+        lines.append(
+            f"{t['month_realized']}: {fmt_dual_ils_usd(period.month_realized_ils, fx, show_plus=True)} "
+            f"({period.month_trade_count} {t['trades']})"
+        )
+    lines.append(f"{t['cash']}: {fmt_money(summary.cash_ils, 'ILS')} | {fmt_money(summary.cash_usd, 'USD')}")
+    if allocation and allocation.total_ils > 0:
+        market_labels = {"US": t["market_us_short"], "IL": t["market_il_short"], "CASH": t["cash"]}
+        alloc = ", ".join(
+            f"{market_labels[k]} {_pct_of(allocation.by_market_ils.get(k, 0.0), allocation.total_ils):.0f}%"
+            for k in ("US", "IL", "CASH")
+            if allocation.by_market_ils.get(k, 0.0) > 0
+        )
+        if alloc:
+            lines.append(f"{t['allocation_by_market']}: {alloc}")
+    if benchmark:
+        us = fmt_pct(benchmark.us_change_pct) if benchmark.us_change_pct is not None else "—"
+        il = fmt_pct(benchmark.il_change_pct) if benchmark.il_change_pct is not None else "—"
+        lines.append(f"{t['benchmark_title']}: {t['portfolio_daily']} {fmt_pct(benchmark.portfolio_daily_pct)} | {benchmark.us_name} {us} | {benchmark.il_name} {il}")
+    blocks = [heading(f"📁 {portfolio_name} — 📊 {t['portfolio_summary']}", size=1), pre("\n".join(lines))]
+
+    daily_items = [i for i in summary.symbol_pnls if i.daily_pnl is not None]
+    if daily_items:
+        daily_items.sort(key=lambda i: abs(i.daily_pnl or 0), reverse=True)
+        blocks.append(
+            table(
+                ["נייר", t["daily_change"], "%"],
+                [
+                    [i.symbol, fmt_money(i.daily_pnl, i.currency, show_plus=True), fmt_pct(i.change_pct) if i.change_pct is not None else "—"]
+                    for i in daily_items
+                ],
+                aligns=["left", "right", "right"],
+                caption=t["daily_pnl_by_symbol"],
+            )
+        )
+    if summary.symbol_pnls:
+        blocks.append(
+            table(
+                ["נייר", t["quantity"], t["realized"], t["unrealized"], t["total"]],
+                [
+                    [
+                        i.symbol,
+                        f"{i.quantity:g}" if i.quantity > 1e-9 else "—",
+                        fmt_money(i.realized, i.currency, show_plus=True),
+                        fmt_money(i.unrealized, i.currency, show_plus=True),
+                        fmt_money(i.realized + i.unrealized, i.currency, show_plus=True),
+                    ]
+                    for i in summary.symbol_pnls
+                ],
+                aligns=["left", "right", "right", "right", "right"],
+                caption=t["pnl_by_symbol"],
+            )
+        )
+    return blocks
+
+
 def format_monthly_report(
     summary: PortfolioSummary,
     portfolio_name: str,
