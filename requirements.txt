@@ -1,4 +1,4 @@
-aiogram>=3.4
+aiogram>=3.34
 aiosqlite>=0.20
 asyncpg>=0.29
 yfinance>=0.2

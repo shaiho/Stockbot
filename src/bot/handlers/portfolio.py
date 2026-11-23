@@ -21,6 +21,7 @@ from src.bot.keyboards import (
     year_keyboard,
 )
 from src.bot.portfolio_flow import resolve_portfolio, show_portfolio_picker, touch_portfolio
+from src.bot.rich import send_rich
 from src.bot.corporate_action_notify import send_pending_split_prompts
 from src.bot.states import HistoryStates, MonthlyStates, PnlStates, QuoteStates, TaxStates, TradeStates
 from src.bot.symbol_flow import prompt_ambiguous_symbol, resolve_symbol_message
@@ -29,6 +30,7 @@ from src.portfolio.benchmark import compute_benchmark_comparison
 from src.portfolio.formatter import (
     HTML,
     format_holdings,
+    format_holdings_rich,
     format_monthly_report,
     format_portfolio_summary,
     format_portfolio_summary_parts,
@@ -311,7 +313,10 @@ async def _send_holdings(message, ctx, user, lang, t, portfolio_id):
         portfolio.opening_cash_usd,
     )
     kb = holdings_shortcuts_keyboard(portfolio_id, summary.holdings, t) if summary.holdings else None
-    await message.answer(format_holdings(summary, portfolio.name, t), reply_markup=kb, parse_mode=HTML)
+    try:
+        await send_rich(message.bot, message.chat.id, format_holdings_rich(summary, portfolio.name, t), reply_markup=kb)
+    except Exception:
+        await message.answer(format_holdings(summary, portfolio.name, t), reply_markup=kb, parse_mode=HTML)
 
     from datetime import datetime
 

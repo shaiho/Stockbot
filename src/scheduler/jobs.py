@@ -41,7 +41,8 @@ from src.market.splits import split_already_applied
 from src.market.prices import PriceProvider
 from src.portfolio.calculator import PortfolioCalculator
 from src.portfolio.commission import calc_trade_commission
-from src.portfolio.formatter import HTML, format_daily_report, format_monthly_report
+from src.portfolio.formatter import HTML, format_daily_report, format_daily_report_rich, format_monthly_report
+from src.bot.rich import send_rich
 from src.portfolio.allocation import compute_allocation
 from src.portfolio.benchmark import compute_benchmark_comparison
 from src.portfolio.returns import compute_period_returns
@@ -333,7 +334,12 @@ class BotScheduler:
                     benchmark=benchmark,
                     morning=morning,
                 )
-                await self.bot.send_message(user.telegram_id, text, parse_mode=HTML)
+                try:
+                    blocks = format_daily_report_rich(summary, portfolio.name, t, morning=morning)
+                    await send_rich(self.bot, user.telegram_id, blocks)
+                except Exception:
+                    logger.exception("Rich report failed for user %s, falling back to text", user.telegram_id)
+                    await self.bot.send_message(user.telegram_id, text, parse_mode=HTML)
                 await self.repo.mark_alert_sent(user.telegram_id, report_key, today)
             except Exception as exc:
                 logger.exception("Report failed for user %s portfolio %s: %s", user.telegram_id, portfolio.id, exc)

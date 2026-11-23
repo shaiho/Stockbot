@@ -336,6 +336,69 @@ def format_daily_report(
     return "\n".join(lines)
 
 
+def format_daily_report_rich(
+    summary: PortfolioSummary, portfolio_name: str, t: dict, *, morning: bool
+) -> list:
+    """Daily report as rich-message blocks: heading + summary text + native holdings table."""
+    from src.bot.rich import heading, pre, strip_tags, table
+
+    header = f"🌅 {t['morning_report']}" if morning else f"🌙 {t['evening_report']}"
+    blocks = [
+        heading(f"{header} — 📁 {portfolio_name}", size=1),
+        pre(strip_tags(format_portfolio_summary(summary, portfolio_name, t))),
+    ]
+    if summary.holdings:
+        rows = []
+        for item in summary.holdings:
+            total = item.realized + item.unrealized
+            price = fmt_money(item.current_price, item.currency) if item.current_price is not None else "—"
+            daily = fmt_money(item.daily_pnl, item.currency, show_plus=True) if item.daily_pnl is not None else "—"
+            pct = fmt_pct(item.change_pct) if item.change_pct is not None else "—"
+            rows.append([item.symbol, f"{item.quantity:g}", price, f"{daily} ({pct})", fmt_money(total, item.currency, show_plus=True)])
+        blocks.append(
+            table(
+                [t["symbol_col"] if "symbol_col" in t else "נייר", t["quantity"], t["price"], t["daily_change"], t["pnl"]],
+                rows,
+                aligns=["left", "right", "right", "right", "right"],
+                caption=t["holdings"],
+            )
+        )
+    return blocks
+
+
+def format_holdings_rich(summary: PortfolioSummary, portfolio_name: str, t: dict) -> list:
+    """Holdings view as rich blocks: heading + native table."""
+    from src.bot.rich import heading, table
+
+    blocks = [heading(f"📋 {t['holdings']} — 📁 {portfolio_name}", size=1)]
+    if not summary.holdings:
+        return blocks
+    rows = []
+    for item in summary.holdings:
+        if item.current_price is None:
+            rows.append([item.symbol, f"{item.quantity:g}", "—", "—", "—", "—"])
+            continue
+        value = item.quantity * item.current_price
+        rows.append(
+            [
+                item.symbol,
+                f"{item.quantity:g}",
+                fmt_money(item.avg_cost, item.currency),
+                fmt_money(item.current_price, item.currency),
+                fmt_money(value, item.currency),
+                fmt_money(item.unrealized, item.currency, show_plus=True),
+            ]
+        )
+    blocks.append(
+        table(
+            [t["symbol_col"] if "symbol_col" in t else "נייר", t["quantity"], t["avg_cost"], t["current_price"], t["value"] if "value" in t else "שווי", t["unrealized"]],
+            rows,
+            aligns=["left", "right", "right", "right", "right", "right"],
+        )
+    )
+    return blocks
+
+
 def fmt_date(timestamp: str) -> str:
     if len(timestamp) >= 10 and timestamp[4] == "-":
         y, m, d = timestamp[:10].split("-")
