@@ -296,6 +296,33 @@ function handle_action(string $a): never
             }
             redirect('?p=orders');
 
+        case 'order_execute':
+            $o = $repo->order((int) ($_POST['order_id'] ?? 0), $uid);
+            if (!$o || $o['status'] !== 'open') {
+                fail('ההוראה לא נמצאה או שכבר טופלה', '?p=orders');
+            }
+            $fill = num($_POST['fill_price'] ?? '') ?? $o['limit_price'];
+            if ($fill <= 0) {
+                fail('מחיר ביצוע לא תקין', '?p=orders');
+            }
+            if ($o['action'] === 'sell') {
+                $held = array_values(array_filter(
+                    Calc::holdings($repo->trades($o['portfolio_id'])),
+                    fn($h) => strtoupper($h['symbol']) === strtoupper($o['symbol']) && $h['market'] === $o['market']
+                ));
+                if (!$held || $held[0]['quantity'] + 1e-9 < $o['quantity']) {
+                    fail('אין מספיק יחידות למכירה', '?p=orders');
+                }
+            }
+            $p = owned_portfolio($o['portfolio_id']);
+            $commission = Calc::commission($p, $o['quantity'], $fill, $o['currency']);
+            $tid = $repo->executeOrder($o['id'], $uid, $fill, $commission, sprintf('הוראת לימיט #%d (בוצעה ידנית)', $o['id']));
+            if ($tid === null) {
+                fail('ההוראה כבר בוצעה', '?p=orders');
+            }
+            flash('ok', sprintf('הוראה #%d בוצעה: %s %s %s במחיר %s (עסקה #%d)', $o['id'], $o['action'] === 'buy' ? 'קניית' : 'מכירת', qty($o['quantity']), $o['symbol'], money($fill, $o['currency']), $tid));
+            redirect('?p=orders');
+
         case 'order_cancel':
             if ($repo->cancelOrder((int) ($_POST['order_id'] ?? 0), $uid)) {
                 flash('ok', 'ההוראה בוטלה');

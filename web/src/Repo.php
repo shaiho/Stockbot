@@ -366,6 +366,39 @@ final class Repo
         return array_map([$this, 'hydrateOrder'], $rows);
     }
 
+    public function order(int $id, int $userId): ?array
+    {
+        $row = $this->run('SELECT * FROM pending_orders WHERE id = ? AND user_id = ?', [$id, $userId])->fetch();
+        return $row ? $this->hydrateOrder($row) : null;
+    }
+
+    /** Marks an open order executed and inserts the fill trade atomically. Returns trade id or null when already resolved. */
+    public function executeOrder(int $id, int $userId, float $price, float $commission, string $note): ?int
+    {
+        $this->db->beginTransaction();
+        try {
+            $claimed = $this->run(
+                "UPDATE pending_orders SET status = 'executed', resolved_at = NOW() WHERE id = ? AND user_id = ? AND status = 'open'",
+                [$id, $userId]
+            )->rowCount() > 0;
+            if (!$claimed) {
+                $this->db->rollBack();
+                return null;
+            }
+            $o = $this->run('SELECT * FROM pending_orders WHERE id = ?', [$id])->fetch();
+            $tid = $this->addTrade(
+                (int) $o['portfolio_id'], $o['symbol'], $o['market'], 'stock', $o['action'],
+                (float) $o['quantity'], $price, $o['currency'], $commission, $note, null
+            );
+            $this->run('UPDATE pending_orders SET executed_trade_id = ? WHERE id = ?', [$tid, $id]);
+            $this->db->commit();
+            return $tid;
+        } catch (Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
     public function addOrder(int $userId, int $portfolioId, string $symbol, string $market, string $action, float $qty, float $price, string $currency, string $expiresOn): int
     {
         return (int) $this->run(

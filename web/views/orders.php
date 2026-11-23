@@ -28,6 +28,7 @@ $actLabels = ['buy' => 'קנייה', 'sell' => 'מכירה'];
       <td class="actions">
         <?php if ($o['status'] === 'open'): ?>
           <button type="button" class="link edit-order" data-id="<?= $o['id'] ?>" data-symbol="<?= h($o['symbol']) ?>" data-qty="<?= h((string) $o['quantity']) ?>" data-price="<?= h((string) $o['limit_price']) ?>" data-expires="<?= h($o['expires_on']) ?>">ערוך</button>
+          <form method="post" action="?a=order_execute" class="exec-order"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= $o['id'] ?>"><input type="hidden" name="fill_price" value="<?= h((string) $o['limit_price']) ?>"><button class="link">בוצע</button></form>
           <form method="post" action="?a=order_cancel" data-confirm="לבטל את ההוראה #<?= $o['id'] ?>?"><?= csrf_field() ?><input type="hidden" name="order_id" value="<?= $o['id'] ?>"><button class="link danger">בטל</button></form>
         <?php endif; ?>
       </td>
@@ -61,4 +62,10 @@ document.querySelectorAll('.edit-order').forEach(b => b.addEventListener('click'
 }));
 document.getElementById('oe-cancel').addEventListener('click', () => { oe.hidden = true; });
 oe.addEventListener('click', e => { if (e.target === oe) oe.hidden = true; });
+document.querySelectorAll('form.exec-order').forEach(f => f.addEventListener('submit', e => {
+  const inp = f.querySelector('[name=fill_price]');
+  const v = prompt('מחיר ביצוע בפועל ליחידה:', inp.value);
+  if (v === null) { e.preventDefault(); return; }
+  inp.value = v;
+}));
 </script>
