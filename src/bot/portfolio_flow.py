@@ -30,12 +30,13 @@ async def show_portfolio_picker(
     *,
     action: str = "pick_portfolio",
     include_new: bool = False,
+    include_all: bool = False,
     prompt_key: str = "choose_portfolio",
     edit: bool = False,
 ) -> None:
     text = t[prompt_key]
     kb = portfolio_picker_keyboard(
-        portfolios, lang, include_new=include_new, action=action
+        portfolios, lang, include_new=include_new, include_all=include_all, action=action
     )
     if edit:
         await target.edit_text(text, reply_markup=kb)

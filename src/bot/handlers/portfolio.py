@@ -124,7 +124,7 @@ async def menu_portfolio(message: Message, **data) -> None:
             message, [], lang, t, action="portfolio_summary", include_new=True
         )
         return
-    await show_portfolio_picker(message, portfolios, lang, t, action="portfolio_summary")
+    await show_portfolio_picker(message, portfolios, lang, t, action="portfolio_summary", include_all=True)
 
 
 @router.callback_query(StateFilter(None), F.data.startswith("portfolio_summary:"))
@@ -132,12 +132,66 @@ async def pick_portfolio(callback: CallbackQuery, **data) -> None:
     ctx = data["ctx"]
     user, lang = await get_user_lang(ctx.repo, callback.from_user.id)
     t = ctx.i18n.load(lang)
-    portfolio_id = int(callback.data.split(":")[1])
+    target = callback.data.split(":")[1]
+    if target == "all":
+        await _send_all_summary(callback.message, ctx, user, lang, t, edit=True)
+        await callback.answer()
+        return
+    portfolio_id = int(target)
     await touch_portfolio(ctx.repo, user, portfolio_id)
 
     # Determine intent from FSM or default to summary
     await _send_summary(callback.message, ctx, user, lang, t, portfolio_id, edit=True)
     await callback.answer()
+
+
+async def _send_all_summary(message, ctx, user, lang, t, edit=False):
+    from src.portfolio.calculator import PortfolioSummary
+
+    portfolios = await ctx.repo.get_portfolios(user.telegram_id)
+    if not portfolios:
+        return
+    summaries = []
+    for p in portfolios:
+        holdings = await ctx.repo.get_holdings(p.id)
+        trades = await ctx.repo.get_trades(p.id)
+        cash_ils, cash_usd = await ctx.repo.get_cash_balances(p.id)
+        summaries.append(
+            await ctx.calculator.compute_summary(
+                holdings, trades, cash_ils, cash_usd, p.opening_cash_ils, p.opening_cash_usd
+            )
+        )
+    if not summaries:
+        return
+    opening = sum(s.opening_capital_ils for s in summaries)
+    total_pnl = sum(s.total_pnl_ils for s in summaries)
+    combined = PortfolioSummary(
+        total_ils=sum(s.total_ils for s in summaries),
+        total_usd=sum(s.total_usd for s in summaries),
+        fx_rate=summaries[0].fx_rate,
+        opening_capital_ils=opening,
+        investments_pnl_ils=sum(s.investments_pnl_ils for s in summaries),
+        total_pnl_ils=total_pnl,
+        total_pnl_pct=(total_pnl / opening * 100) if opening else 0.0,
+        daily_change_ils=sum(s.daily_change_ils for s in summaries),
+        cash_ils=sum(s.cash_ils for s in summaries),
+        cash_usd=sum(s.cash_usd for s in summaries),
+        holdings=[],
+        symbol_pnls=[],
+    )
+    label = "כל התיקים" if lang == "he" else "All portfolios"
+    benchmark = await compute_benchmark_comparison(combined, ctx.prices)
+    try:
+        blocks = format_portfolio_summary_rich(combined, label, t, benchmark=benchmark)
+        await send_rich(message.bot, message.chat.id, blocks)
+        if edit:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+    except Exception:
+        parts = format_portfolio_summary_parts(combined, label, t)
+        await message.answer("".join(parts), parse_mode=HTML)
 
 
 async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):

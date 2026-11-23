@@ -101,12 +101,15 @@ def main_menu_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 def portfolio_picker_keyboard(
-    portfolios: list[Portfolio], lang: str, *, include_new: bool = False, action: str = "pick_portfolio"
+    portfolios: list[Portfolio], lang: str, *, include_new: bool = False, include_all: bool = False, action: str = "pick_portfolio"
 ) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=f"📁 {p.name}", callback_data=f"{action}:{p.id}")]
         for p in portfolios
     ]
+    if include_all and len(portfolios) > 1:
+        label = "🌐 כל התיקים" if lang == "he" else "🌐 All portfolios"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"{action}:all")])
     if include_new:
         label = "➕ תיק חדש" if lang == "he" else "➕ New portfolio"
         rows.append([InlineKeyboardButton(text=label, callback_data="new_portfolio")])
