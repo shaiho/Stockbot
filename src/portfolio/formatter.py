@@ -217,19 +217,19 @@ def format_portfolio_summary_rich(
 
     fx = summary.fx_rate
     rows = [
-        [t["total_value"], f"₪{summary.total_ils:,.0f} | ${summary.total_usd:,.2f}"],
-        [t["daily_change"], fmt_dual_ils_usd(summary.daily_change_ils, fx, show_plus=True)],
-        [t["total_pnl"], f"{fmt_dual_ils_usd(summary.total_pnl_ils, fx, show_plus=True)} ({fmt_pct(summary.total_pnl_pct)})"],
-        [t["investments_pnl"], fmt_dual_ils_usd(summary.investments_pnl_ils, fx, show_plus=True)],
+        [f"₪{summary.total_ils:,.0f} | ${summary.total_usd:,.2f}", t["total_value"]],
+        [fmt_dual_ils_usd(summary.daily_change_ils, fx, show_plus=True), t["daily_change"]],
+        [f"{fmt_dual_ils_usd(summary.total_pnl_ils, fx, show_plus=True)} ({fmt_pct(summary.total_pnl_pct)})", t["total_pnl"]],
+        [fmt_dual_ils_usd(summary.investments_pnl_ils, fx, show_plus=True), t["investments_pnl"]],
     ]
     if period:
         rows.append(
-            [t["ytd_realized"], f"{fmt_dual_ils_usd(period.ytd_realized_ils, fx, show_plus=True)} ({period.ytd_trade_count} {t['trades']})"]
+            [f"{fmt_dual_ils_usd(period.ytd_realized_ils, fx, show_plus=True)} ({period.ytd_trade_count} {t['trades']})", t["ytd_realized"]]
         )
         rows.append(
-            [t["month_realized"], f"{fmt_dual_ils_usd(period.month_realized_ils, fx, show_plus=True)} ({period.month_trade_count} {t['trades']})"]
+            [f"{fmt_dual_ils_usd(period.month_realized_ils, fx, show_plus=True)} ({period.month_trade_count} {t['trades']})", t["month_realized"]]
         )
-    rows.append([t["cash"], f"{fmt_money(summary.cash_ils, 'ILS')} | {fmt_money(summary.cash_usd, 'USD')}"])
+    rows.append([f"{fmt_money(summary.cash_ils, 'ILS')} | {fmt_money(summary.cash_usd, 'USD')}", t["cash"]])
     if allocation and allocation.total_ils > 0:
         market_labels = {"US": t["market_us_short"], "IL": t["market_il_short"], "CASH": t["cash"]}
         alloc = ", ".join(
@@ -238,14 +238,14 @@ def format_portfolio_summary_rich(
             if allocation.by_market_ils.get(k, 0.0) > 0
         )
         if alloc:
-            rows.append([t["allocation_by_market"], alloc])
+            rows.append([alloc, t["allocation_by_market"]])
     if benchmark:
         us = fmt_pct(benchmark.us_change_pct) if benchmark.us_change_pct is not None else "—"
         il = fmt_pct(benchmark.il_change_pct) if benchmark.il_change_pct is not None else "—"
-        rows.append([t["benchmark_title"], f"{t['portfolio_daily']} {fmt_pct(benchmark.portfolio_daily_pct)} | {benchmark.us_name} {us} | {benchmark.il_name} {il}"])
+        rows.append([f"{t['portfolio_daily']} {fmt_pct(benchmark.portfolio_daily_pct)} | {benchmark.us_name} {us} | {benchmark.il_name} {il}", t["benchmark_title"]])
     blocks = [
         heading(f"📁 {portfolio_name} — 📊 {t['portfolio_summary']}", size=1),
-        table(None, rows, aligns=["left", "left"], compact=True),
+        table(None, rows, aligns=["left", "right"], compact=True),
     ]
 
     daily_items = [i for i in summary.symbol_pnls if i.daily_pnl is not None]
