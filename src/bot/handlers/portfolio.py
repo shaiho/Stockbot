@@ -181,9 +181,14 @@ async def _send_all_summary(message, ctx, user, lang, t, edit=False):
     )
     label = "כל התיקים" if lang == "he" else "All portfolios"
     benchmark = await compute_benchmark_comparison(combined, ctx.prices)
+    refresh_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 רענן" if lang == "he" else "🔄 Refresh", callback_data="portfolio_summary:all")]
+        ]
+    )
     try:
         blocks = format_portfolio_summary_rich(combined, label, t, benchmark=benchmark)
-        await send_rich(message.bot, message.chat.id, blocks)
+        await send_rich(message.bot, message.chat.id, blocks, reply_markup=refresh_kb)
         if edit:
             try:
                 await message.delete()
@@ -191,7 +196,7 @@ async def _send_all_summary(message, ctx, user, lang, t, edit=False):
                 pass
     except Exception:
         parts = format_portfolio_summary_parts(combined, label, t)
-        await message.answer("".join(parts), parse_mode=HTML)
+        await message.answer("".join(parts), parse_mode=HTML, reply_markup=refresh_kb)
 
 
 async def _send_summary(message, ctx, user, lang, t, portfolio_id, edit=False):
