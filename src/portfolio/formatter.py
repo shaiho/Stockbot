@@ -213,25 +213,23 @@ def format_portfolio_summary_rich(
     benchmark: BenchmarkComparison | None = None,
 ) -> list:
     """Portfolio summary as rich blocks: heading + stats + native tables for daily/per-symbol P&L."""
-    from src.bot.rich import heading, pre, table
+    from src.bot.rich import heading, table
 
     fx = summary.fx_rate
-    lines = [
-        f"{t['total_value']}: ₪{summary.total_ils:,.0f} | ${summary.total_usd:,.2f}",
-        f"{t['daily_change']}: {fmt_dual_ils_usd(summary.daily_change_ils, fx, show_plus=True)}",
-        f"{t['total_pnl']}: {fmt_dual_ils_usd(summary.total_pnl_ils, fx, show_plus=True)} ({fmt_pct(summary.total_pnl_pct)})",
-        f"{t['investments_pnl']}: {fmt_dual_ils_usd(summary.investments_pnl_ils, fx, show_plus=True)}",
+    rows = [
+        [t["total_value"], f"₪{summary.total_ils:,.0f} | ${summary.total_usd:,.2f}"],
+        [t["daily_change"], fmt_dual_ils_usd(summary.daily_change_ils, fx, show_plus=True)],
+        [t["total_pnl"], f"{fmt_dual_ils_usd(summary.total_pnl_ils, fx, show_plus=True)} ({fmt_pct(summary.total_pnl_pct)})"],
+        [t["investments_pnl"], fmt_dual_ils_usd(summary.investments_pnl_ils, fx, show_plus=True)],
     ]
     if period:
-        lines.append(
-            f"{t['ytd_realized']}: {fmt_dual_ils_usd(period.ytd_realized_ils, fx, show_plus=True)} "
-            f"({period.ytd_trade_count} {t['trades']})"
+        rows.append(
+            [t["ytd_realized"], f"{fmt_dual_ils_usd(period.ytd_realized_ils, fx, show_plus=True)} ({period.ytd_trade_count} {t['trades']})"]
         )
-        lines.append(
-            f"{t['month_realized']}: {fmt_dual_ils_usd(period.month_realized_ils, fx, show_plus=True)} "
-            f"({period.month_trade_count} {t['trades']})"
+        rows.append(
+            [t["month_realized"], f"{fmt_dual_ils_usd(period.month_realized_ils, fx, show_plus=True)} ({period.month_trade_count} {t['trades']})"]
         )
-    lines.append(f"{t['cash']}: {fmt_money(summary.cash_ils, 'ILS')} | {fmt_money(summary.cash_usd, 'USD')}")
+    rows.append([t["cash"], f"{fmt_money(summary.cash_ils, 'ILS')} | {fmt_money(summary.cash_usd, 'USD')}"])
     if allocation and allocation.total_ils > 0:
         market_labels = {"US": t["market_us_short"], "IL": t["market_il_short"], "CASH": t["cash"]}
         alloc = ", ".join(
@@ -240,12 +238,15 @@ def format_portfolio_summary_rich(
             if allocation.by_market_ils.get(k, 0.0) > 0
         )
         if alloc:
-            lines.append(f"{t['allocation_by_market']}: {alloc}")
+            rows.append([t["allocation_by_market"], alloc])
     if benchmark:
         us = fmt_pct(benchmark.us_change_pct) if benchmark.us_change_pct is not None else "—"
         il = fmt_pct(benchmark.il_change_pct) if benchmark.il_change_pct is not None else "—"
-        lines.append(f"{t['benchmark_title']}: {t['portfolio_daily']} {fmt_pct(benchmark.portfolio_daily_pct)} | {benchmark.us_name} {us} | {benchmark.il_name} {il}")
-    blocks = [heading(f"📁 {portfolio_name} — 📊 {t['portfolio_summary']}", size=1), pre("\n".join(lines))]
+        rows.append([t["benchmark_title"], f"{t['portfolio_daily']} {fmt_pct(benchmark.portfolio_daily_pct)} | {benchmark.us_name} {us} | {benchmark.il_name} {il}"])
+    blocks = [
+        heading(f"📁 {portfolio_name} — 📊 {t['portfolio_summary']}", size=1),
+        table(None, rows, aligns=["left", "left"], compact=True),
+    ]
 
     daily_items = [i for i in summary.symbol_pnls if i.daily_pnl is not None]
     if daily_items:
@@ -418,14 +419,12 @@ def format_daily_report(
 def format_daily_report_rich(
     summary: PortfolioSummary, portfolio_name: str, t: dict, *, morning: bool
 ) -> list:
-    """Daily report as rich-message blocks: heading + summary text + native holdings table."""
-    from src.bot.rich import heading, pre, strip_tags, table
+    """Daily report as rich-message blocks: heading + summary tables + native holdings table."""
+    from src.bot.rich import heading, table
 
     header = f"🌅 {t['morning_report']}" if morning else f"🌙 {t['evening_report']}"
-    blocks = [
-        heading(f"{header} — 📁 {portfolio_name}", size=1),
-        pre(strip_tags(format_portfolio_summary(summary, portfolio_name, t))),
-    ]
+    blocks = [heading(f"{header} — 📁 {portfolio_name}", size=1)]
+    blocks += format_portfolio_summary_rich(summary, portfolio_name, t)[1:]
     if summary.holdings:
         rows = []
         for item in summary.holdings:
