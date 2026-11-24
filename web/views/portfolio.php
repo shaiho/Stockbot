@@ -263,6 +263,7 @@ $pid = $p['id'];
       <h3>פעולות</h3>
       <form method="post" action="?a=portfolio_recalc" data-confirm="לחשב מחדש את העמלות בכל העסקאות?"><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button>חשב עמלות מחדש לכל העסקאות</button></form>
       <form method="post" action="?a=snapshot_backfill" data-confirm="לשחזר היסטוריית שווי מעסקאות + מחירים היסטוריים? (נתונים קיימים לא יימחקו)"><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button>שחזר היסטוריית שווי</button></form>
+      <form method="post" action="?a=snapshot_repair" data-confirm="למחוק נקודות חריגות (קפיצות חדות ליום בודד) ולשחזר אותן מחדש?"><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button>תקן סטיות בגרף שווי</button></form>
       <form method="post" action="?a=portfolio_clear_trades" data-confirm="למחוק את כל העסקאות בתיק? לא ניתן לשחזר."><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button class="danger">מחק את כל העסקאות</button></form>
       <form method="post" action="?a=portfolio_delete" data-confirm="למחוק את התיק כולו? לא ניתן לשחזר."><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button class="danger">מחק תיק</button></form>
     </div>

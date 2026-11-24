@@ -607,6 +607,26 @@ function handle_action(string $a): never
             flash('ok', sprintf('שוחזרו %d נקודות שווי היסטוריות (מתוך %d מחושבות)', $n, count($rows)));
             redirect('?p=portfolio&id=' . $p['id']);
 
+        case 'snapshot_repair':
+            $p = owned_portfolio((int) ($_POST['portfolio_id'] ?? 0));
+            set_time_limit(120);
+            $snaps = $repo->snapshots($p['id']);
+            $bad = [];
+            foreach ($snaps as $i => $s) {
+                if ($i === 0 || $i === count($snaps) - 1) {
+                    continue;
+                }
+                $mid = ($snaps[$i - 1]['total_ils'] + $snaps[$i + 1]['total_ils']) / 2;
+                if (abs($mid) > 1 && abs($s['total_ils'] - $mid) / abs($mid) > 0.15) {
+                    $bad[] = $s['date'];
+                }
+            }
+            $removed = $repo->deleteSnapshots($p['id'], $bad);
+            [$rows, $err] = backfill_snapshots($p);
+            $added = $err === null ? $repo->insertSnapshots($p['id'], $rows) : 0;
+            flash('ok', sprintf('נמחקו %d נקודות חריגות, שוחזרו %d', $removed, $added));
+            redirect('?p=portfolio&id=' . $p['id']);
+
         case 'settings_save':
             $user = $repo->user($uid);
             $comm = num($_POST['default_commission'] ?? '');

@@ -402,6 +402,18 @@ class BotScheduler:
             for portfolio in await self.repo.get_portfolios(user.telegram_id):
                 try:
                     holdings = await self.repo.get_holdings(portfolio.id)
+                    missing = [
+                        h.symbol
+                        for h in holdings
+                        if h.quantity > 1e-9 and await self.prices.get_quote(h.symbol, h.market) is None
+                    ]
+                    if missing:
+                        logger.warning(
+                            "Snapshot skipped for portfolio %s — no quote for %s",
+                            portfolio.id,
+                            ", ".join(missing),
+                        )
+                        continue
                     trades = await self.repo.get_trades(portfolio.id)
                     cash_ils, cash_usd = await self.repo.get_cash_balances(portfolio.id)
                     summary = await self.calculator.compute_summary(

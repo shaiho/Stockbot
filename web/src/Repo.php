@@ -307,6 +307,16 @@ final class Repo
         }
     }
 
+    /** Delete snapshot rows for given dates. Returns removed count. */
+    public function deleteSnapshots(int $portfolioId, array $dates): int
+    {
+        if (!$dates) {
+            return 0;
+        }
+        $marks = implode(',', array_fill(0, count($dates), '?'));
+        return $this->run("DELETE FROM portfolio_snapshots WHERE portfolio_id = ? AND date IN ($marks)", array_merge([$portfolioId], $dates))->rowCount();
+    }
+
     /** Backfill daily snapshots; existing (portfolio_id,date) rows are kept. Returns inserted count. */
     public function insertSnapshots(int $portfolioId, array $rows): int
     {
