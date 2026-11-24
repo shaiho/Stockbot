@@ -196,7 +196,10 @@ function handle_page(string $page): never
             ], $symbol);
 
         case 'orders':
-            render('orders', ['orders' => $repo->pendingOrders($uid), 'portfolios' => $repo->portfolios($uid)], 'הוראות');
+            $orders = $repo->pendingOrders($uid);
+            $open = array_values(array_filter($orders, fn($o) => $o['status'] === 'open'));
+            $quotes = $open ? prices()->quotes(array_map(fn($o) => [$o['symbol'], $o['market']], $open), $fresh) : [];
+            render('orders', ['orders' => $orders, 'quotes' => $quotes, 'portfolios' => $repo->portfolios($uid)], 'הוראות');
 
         case 'trade':
             $trade = $repo->trade((int) ($_GET['id'] ?? 0), $uid);
@@ -211,7 +214,15 @@ function handle_page(string $page): never
             render('watchlist', ['items' => $items, 'quotes' => $quotes, 'pricedAt' => priced_at($quotes)], 'מעקב');
 
         case 'alerts':
-            render('alerts', ['rules' => $repo->alertRules($uid), 'portfolios' => $repo->portfolios($uid)], 'התראות');
+            $rules = $repo->alertRules($uid);
+            $targets = [];
+            foreach ($rules as $r) {
+                if ($r['enabled'] && $r['alert_type'] === 'price_target' && !empty($r['config']['symbol'])) {
+                    $targets[] = [$r['config']['symbol'], $r['config']['market'] ?? 'US'];
+                }
+            }
+            $quotes = $targets ? prices()->quotes($targets, $fresh) : [];
+            render('alerts', ['rules' => $rules, 'quotes' => $quotes, 'portfolios' => $repo->portfolios($uid)], 'התראות');
 
         case 'settings':
             render('settings', ['u' => $repo->user($uid)], 'הגדרות');

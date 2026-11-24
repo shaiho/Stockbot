@@ -18,6 +18,11 @@
   <div class="card"><span>שינוי יומי — כל התיקים</span><b class="<?= tone($tot['daily']) ?>"><?= money($tot['daily'], 'ILS', true) ?></b></div>
   <div class="card"><span>רווח/הפסד — כל התיקים</span><b class="<?= tone($tot['pnl']) ?>"><?= money($tot['pnl'], 'ILS', true) ?></b><small><?= $tot['cap'] > 0 ? pct($tot['pnl'] / $tot['cap'] * 100) : '' ?></small></div>
 </div>
+<p class="muted">היום:
+  <?php foreach ($portfolios as $p): $s = $data[$p['id']]['sum']; ?>
+    <a class="chip <?= tone($s['daily_change_ils']) ?>" href="?p=portfolio&id=<?= $p['id'] ?>"><?= h($p['name']) ?> <?= money($s['daily_change_ils'], 'ILS', true) ?></a>
+  <?php endforeach; ?>
+</p>
 <?php if (count($snapshots) >= 2):
     $pts = array_map(fn($s) => [$s['date'], (float) $s['total_ils']], $snapshots);
     $ys = array_column($pts, 1); $y0 = min($ys); $y1 = max($ys); $n = count($pts) - 1;

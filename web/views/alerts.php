@@ -38,13 +38,28 @@ function alert_detail(array $r, array $names): string
   <p class="muted">אין התראות.</p>
 <?php else: ?>
 <div class="scroll"><table>
-  <thead><tr><th>סוג</th><th>היקף</th><th>פרטים</th><th>סטטוס</th><th></th></tr></thead>
+  <thead><tr><th>סוג</th><th>היקף</th><th>פרטים</th><th>מחיר חי</th><th>סטטוס</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($rules as $r): ?>
     <tr>
       <td><?= h($typeLabels[$r['alert_type']] ?? $r['alert_type']) ?></td>
       <td><?= h($scopeLabels[$r['scope']] ?? $r['scope']) ?></td>
       <td><?= h(alert_detail($r, $names)) ?></td>
+      <td>
+        <?php $c = $r['config'];
+        if ($r['alert_type'] === 'price_target' && !empty($c['symbol']) && !empty($c['target_price'])):
+            $q = $quotes[Prices::key($c['symbol'], $c['market'] ?? 'US')] ?? null;
+            if ($q && $q['price']):
+                $t = (float) $c['target_price'];
+                $below = ($c['direction'] ?? 'above') === 'below';
+                $diff = ($q['price'] - $t) / $t * 100;
+                $dist = $below ? $diff : -$diff;
+                $cls = $dist <= 0 ? 'neg' : ($dist < 3 ? 'warn' : 'muted'); ?>
+                <b><?= money($q['price'], $q['currency'] ?? 'USD') ?></b>
+                <small class="<?= $cls ?>"><?= $dist <= 0 ? 'בטווח!' : sprintf('%+.1f%% לסף', -$dist) ?></small>
+            <?php else: ?>—<?php endif; ?>
+        <?php endif; ?>
+      </td>
       <td><?= $r['enabled'] ? 'פעילה' : '<span class="muted">מושבתת</span>' ?></td>
       <td class="actions"><form method="post" action="?a=alert_delete" data-confirm="למחוק את ההתראה?"><?= csrf_field() ?><input type="hidden" name="id" value="<?= $r['id'] ?>"><button class="link danger">מחק</button></form></td>
     </tr>

@@ -5,6 +5,8 @@
 @media (prefers-color-scheme: dark) {
   :root { --bg: #0f141b; --card: #171e28; --text: #e6ebf2; --muted: #8b97a8; --line: #263041; --accent: #4c8dff; --pos: #3ecf8e; --neg: #ff6b81; }
 }
+:root[data-theme=light] { --bg: #f4f6f9; --card: #fff; --text: #1c2430; --muted: #6b7686; --line: #e2e7ee; --accent: #1f6feb; --pos: #0f8a4b; --neg: #d1344b; }
+:root[data-theme=dark] { --bg: #0f141b; --card: #171e28; --text: #e6ebf2; --muted: #8b97a8; --line: #263041; --accent: #4c8dff; --pos: #3ecf8e; --neg: #ff6b81; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -15,6 +17,7 @@ h1 { font-size: 1.5rem; margin: .5rem 0 1rem; }
 h2 { font-size: 1.15rem; margin: 1.5rem 0 .75rem; }
 h3 { font-size: 1rem; margin: 0 0 .5rem; }
 .muted { color: var(--muted); }
+.warn { color: #d97706; font-weight: 600; }
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
 
@@ -68,6 +71,7 @@ tr:last-child td { border-bottom: 0; }
 .login h1 { text-align: center; margin: 0; }
 section { margin-bottom: 1rem; }
 .refresh { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 0 0 1rem; }
+main.refreshing > * { opacity: .45; pointer-events: none; transition: opacity .15s; }
 .btn { padding: .3rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); }
 .btn:hover { border-color: var(--accent); text-decoration: none; }
 label.inline { flex-direction: row; align-items: center; gap: .35rem; }
@@ -77,3 +81,5 @@ label.inline { flex-direction: row; align-items: center; gap: .35rem; }
 .overlay .card { width: 100%; max-width: 22rem; }
 .filter { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; }
 .nav-badge { padding: 0 .4rem; border-radius: 999px; background: var(--accent, #2563eb); color: #fff; font-size: .8em; }
+.nav-search input { width: 7rem; padding: .2rem .5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); font-size: .9em; }
+.nav-search input:focus { width: 10rem; border-color: var(--accent); outline: none; transition: width .15s; }

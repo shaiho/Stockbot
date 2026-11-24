@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563eb">
 <link rel="icon" href="icon-192.png">
+<script>const th = localStorage.getItem('theme'); if (th) document.documentElement.dataset.theme = th;</script>
 </head>
 <body>
 <?php if (!empty($_SESSION['auth'])): ?>
@@ -20,6 +21,8 @@
     <a href="?p=alerts">התראות</a>
     <a href="?p=settings">הגדרות</a>
   </nav>
+  <form method="get" class="nav-search"><input type="hidden" name="p" value="symbol"><input name="symbol" placeholder="🔍 סימול" autocomplete="off" spellcheck="false" style="text-transform:uppercase"></form>
+  <button type="button" class="link" id="theme-toggle" title="מצב כהה/בהיר">🌓</button>
   <form method="post" action="?a=logout"><?= csrf_field() ?><button class="link">יציאה</button></form>
 </header>
 <?php endif; ?>
@@ -39,6 +42,12 @@ window.updateOrderBadge = () => fetch('?p=order_count').then(r => r.json()).then
   document.getElementById('orders-badge').innerHTML = d.n > 0 ? '<span class="nav-badge">' + d.n + '</span>' : '';
 }).catch(() => {});
 window.updateOrderBadge();
+document.getElementById('theme-toggle')?.addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('theme', next);
+});
 </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <?php $refreshUrl = '?' . http_build_query(array_merge($_GET, ['refresh' => '1'])); ?>
 <div class="refresh muted">
   <span>מחירים נכון ל-<b><?= $pricedAt ? h(date('H:i:s', $pricedAt)) : '—' ?></b></span>
-  <a class="btn" href="<?= h($refreshUrl) ?>">רענן עכשיו</a>
+  <a class="btn" id="refresh-now" href="<?= h($refreshUrl) ?>">רענן עכשיו</a>
   <label class="inline"><input type="checkbox" id="auto-refresh" data-url="<?= h($refreshUrl) ?>"> רענון אוטומטי כל 15 שניות</label>
   <span id="refresh-count"></span>
   <form method="post" action="?a=fx_set" class="inline" style="display:inline-flex;gap:.3rem;align-items:center">
@@ -18,6 +18,8 @@
   const clear = () => { if (window.__arTimer) { clearInterval(window.__arTimer); window.__arTimer = 0; } };
   const refresh = async () => {
     count.textContent = 'מרענן…';
+    const main = document.querySelector('main');
+    main && main.classList.add('refreshing');
     try {
       const res = await fetch(box.dataset.url);
       const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
@@ -36,6 +38,10 @@
       location.href = box.dataset.url;
     }
   };
+  document.getElementById('refresh-now').addEventListener('click', e => {
+    e.preventDefault();
+    if (!document.querySelector('.overlay:not([hidden])')) { clear(); refresh(); }
+  });
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
     if (s <= 0) {

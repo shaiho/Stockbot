@@ -17,13 +17,20 @@ foreach ($byPortfolio as $r) {
 $totQty = 0.0;
 $totValue = 0.0;
 $totPnl = 0.0;
+$avgCost = 0.0;
+$avgQty = 0.0;
 foreach ($byPortfolio as $r) {
+    if ($r['pnl']['quantity'] > 1e-9 && $r['pnl']['avg_cost'] > 0) {
+        $avgCost += $r['pnl']['avg_cost'] * $r['pnl']['quantity'];
+        $avgQty += $r['pnl']['quantity'];
+    }
     $totQty += $r['pnl']['quantity'];
     if ($r['pnl']['price'] !== null) {
         $totValue += $r['pnl']['quantity'] * $r['pnl']['price'];
     }
     $totPnl += $r['pnl']['realized'] + $r['pnl']['unrealized'];
 }
+$avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
 ?>
 <div class="head">
   <h1><?= h($symbol) ?> <small class="muted"><?= h($market) ?></small></h1>
@@ -70,6 +77,7 @@ foreach ($byPortfolio as $r) {
   const box = document.getElementById('price-chart');
   const sym = <?= json_encode($symbol) ?>, mkt = <?= json_encode($market) ?>;
   const trades = <?= json_encode($tradeMarks) ?>;
+  const avgCost = <?= json_encode($avgCost) ?>;
   const draw = async (range) => {
     box.textContent = 'טוען…';
     const pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
@@ -96,9 +104,15 @@ foreach ($byPortfolio as $r) {
       const v = y0 + (y1 - y0) * i / 4, y = py(v);
       grid += `<line x1="${pad}" y1="${y}" x2="${W}" y2="${y}" stroke="#e5e7eb"/><text x="2" y="${y + 4}" font-size="11" fill="#6b7280">${fmt(v)}</text>`;
     }
+    let avgLine = '';
+    if (avgCost > y0 && avgCost < y1) {
+      const ay = py(avgCost);
+      avgLine = `<line x1="${pad}" y1="${ay}" x2="${W}" y2="${ay}" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1"/>` +
+        `<text x="${pad + 4}" y="${ay - 4}" font-size="11" fill="#7c3aed">עלות ממוצעת ${fmt(avgCost)}</text>`;
+    }
     const d0 = new Date(x0 * 1000), d1 = new Date(x1 * 1000);
     const fd = d => d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">` + grid +
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">` + grid + avgLine +
       `<text x="${W}" y="${H - 14}" font-size="11" fill="#6b7280" text-anchor="end">${fd(d0)}</text>` +
       `<text x="${pad}" y="${H - 14}" font-size="11" fill="#6b7280">${fd(d1)}</text>` +
       `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/>` + marks + `</svg>`;

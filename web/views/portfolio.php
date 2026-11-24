@@ -43,8 +43,9 @@ $pid = $p['id'];
         <td class="<?= tone($r['realized']) ?>"><?= money($r['realized'], $c, true) ?></td>
         <td><?= money($r['commissions'], $c) ?></td>
         <td class="actions">
-          <button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="עסקה מהירה">+</button>
-          <button type="button" class="link quick-order" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" title="הוראת לימיט">הוראה</button>
+          <button type="button" class="link quick-add" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" data-qty="<?= h((string) $r['quantity']) ?>" title="עסקה מהירה">+</button>
+          <button type="button" class="link quick-order" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" data-price="<?= h((string) ($r['price'] ?? '')) ?>" data-qty="<?= h((string) $r['quantity']) ?>" title="הוראת לימיט">הוראה</button>
+          <button type="button" class="link quick-div" data-symbol="<?= h($r['symbol']) ?>" data-market="<?= h($r['market']) ?>" title="דיבידנד">דיב</button>
           <a href="?p=alerts&symbol=<?= h($r['symbol']) ?>&market=<?= h($r['market']) ?>" title="התראה">התר</a>
         </td>
       </tr>
@@ -267,10 +268,10 @@ $pid = $p['id'];
     <h2>עסקה מהירה — <span id="qt-title"></span></h2>
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
     <input type="hidden" name="symbol"><input type="hidden" name="market">
-    <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
-    <label>כמות <input name="quantity" inputmode="decimal" required></label>
-    <label>מחיר ליחידה <input name="price" id="qt-price" inputmode="decimal" required></label>
-    <label>עמלה (ריק = אוטומטי) <input name="commission" inputmode="decimal"></label>
+    <label>פעולה <select name="action_type" id="qt-act"><option value="buy">קנייה</option><option value="sell">מכירה</option><option value="dividend">דיבידנד</option></select></label>
+    <label id="qt-qty-row">כמות <input name="quantity" inputmode="decimal" required></label>
+    <label><span id="qt-price-label">מחיר ליחידה</span> <input name="price" id="qt-price" inputmode="decimal" required></label>
+    <label id="qt-comm-row">עמלה (ריק = אוטומטי) <input name="commission" inputmode="decimal"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור עסקה</button> <button type="button" id="qt-cancel">ביטול</button>
   </form>
@@ -291,14 +292,36 @@ $pid = $p['id'];
 
 <script>
 const ov = document.getElementById('qt-overlay');
-document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click', () => {
+const qtAct = document.getElementById('qt-act');
+const qtSync = () => {
+  const div = qtAct.value === 'dividend';
+  document.getElementById('qt-qty-row').hidden = div;
+  document.getElementById('qt-comm-row').hidden = div;
+  document.getElementById('qt-price-label').textContent = div ? 'סכום דיבידנד כולל' : 'מחיר ליחידה';
+  ov.querySelector('[name=quantity]').required = !div;
+};
+qtAct.addEventListener('change', qtSync);
+let qtHeld = Infinity;
+const openQt = (b, isDiv) => {
+  qtHeld = parseFloat(b.dataset.qty || 'Infinity');
   document.getElementById('qt-title').textContent = b.dataset.symbol + ' · ' + b.dataset.market;
   ov.querySelector('[name=symbol]').value = b.dataset.symbol;
   ov.querySelector('[name=market]').value = b.dataset.market;
-  document.getElementById('qt-price').value = b.dataset.price;
+  document.getElementById('qt-price').value = isDiv ? '' : b.dataset.price;
+  qtAct.value = isDiv ? 'dividend' : 'buy';
+  qtSync();
   ov.hidden = false;
-  ov.querySelector('[name=quantity]').focus();
-}));
+  (isDiv ? document.getElementById('qt-price') : ov.querySelector('[name=quantity]')).focus();
+};
+document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click', () => openQt(b, false)));
+document.querySelectorAll('.quick-div').forEach(b => b.addEventListener('click', () => openQt(b, true)));
+ov.querySelector('form').addEventListener('submit', e => {
+  const qty = parseFloat(ov.querySelector('[name=quantity]').value || '0');
+  const price = parseFloat(document.getElementById('qt-price').value || '0');
+  if (price <= 0) { alert('מחיר חייב להיות חיובי'); e.preventDefault(); return; }
+  if (qtAct.value !== 'dividend' && qty <= 0) { alert('כמות חייבת להיות חיובית'); e.preventDefault(); return; }
+  if (qtAct.value === 'sell' && qty > qtHeld) { alert('כמות מכירה גדולה מההחזקה (' + qtHeld + ')'); e.preventDefault(); }
+});
 document.getElementById('qt-cancel').addEventListener('click', () => { ov.hidden = true; });
 
 const hb = document.getElementById('holdings-body');
@@ -326,7 +349,9 @@ if (hb) {
 }
 
 const qo = document.getElementById('qo-overlay');
+let qoHeld = Infinity;
 document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click', () => {
+  qoHeld = parseFloat(b.dataset.qty || 'Infinity');
   document.getElementById('qo-title').textContent = b.dataset.symbol + ' · ' + b.dataset.market;
   qo.querySelector('[name=symbol]').value = b.dataset.symbol;
   qo.querySelector('[name=market]').value = b.dataset.market;
@@ -335,6 +360,12 @@ document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click
   qo.querySelector('[name=quantity]').focus();
 }));
 document.getElementById('qo-cancel').addEventListener('click', () => { qo.hidden = true; });
+qo.querySelector('form').addEventListener('submit', e => {
+  const qty = parseFloat(qo.querySelector('[name=quantity]').value || '0');
+  const price = parseFloat(document.getElementById('qo-price').value || '0');
+  if (qty <= 0 || price <= 0) { alert('כמות ומחיר חייבים להיות חיוביים'); e.preventDefault(); return; }
+  if (qo.querySelector('[name=action_type]').value === 'sell' && qty > qoHeld) { alert('כמות מכירה גדולה מההחזקה (' + qoHeld + ')'); e.preventDefault(); }
+});
 
 const FX = <?= json_encode($sum['fx']) ?>;
 const pcIn = ['pc-amount','pc-price','pc-cur','pc-qty','pc-avg'].map(id => document.getElementById(id));
@@ -354,5 +385,16 @@ act.addEventListener('change', () => {
   document.getElementById('qty-row').hidden = div;
   document.getElementById('comm-row').hidden = div;
   document.getElementById('price-label').textContent = div ? 'סכום דיבידנד כולל' : 'מחיר ליחידה';
+});
+document.getElementById('trade-form').addEventListener('submit', e => {
+  const qty = parseFloat(e.target.querySelector('[name=quantity]').value || '0');
+  const price = parseFloat(e.target.querySelector('[name=price]').value || '0');
+  if (price <= 0) { alert('מחיר חייב להיות חיובי'); e.preventDefault(); return; }
+  if (act.value !== 'dividend' && qty <= 0) { alert('כמות חייבת להיות חיובית'); e.preventDefault(); return; }
+  if (act.value === 'sell') {
+    const row = [...document.querySelectorAll('#holdings-body tr')].find(r => r.dataset.symbol === e.target.querySelector('[name=symbol]').value.toUpperCase());
+    const held = row ? parseFloat(row.dataset.quantity) : 0;
+    if (qty > held) { alert('כמות מכירה גדולה מההחזקה (' + held + ')'); e.preventDefault(); }
+  }
 });
 </script>
