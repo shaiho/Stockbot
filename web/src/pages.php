@@ -145,7 +145,7 @@ function handle_page(string $page): never
             }
             [$data, $quotes] = summaries([$p], $fresh, $tradesBy);
             $all = $data[$p['id']];
-            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'snapshots' => $repo->snapshots($p['id']), 'pricedAt' => priced_at($quotes)], $p['name']);
+            render('portfolio', ['p' => $p, 'trades' => array_reverse($all['trades']), 'sum' => $all['sum'], 'snapshots' => $repo->snapshots($p['id']), 'flows' => Calc::flowMap($all['trades'], $all['sum']['fx']), 'pricedAt' => priced_at($quotes)], $p['name']);
 
         case 'symbol':
             $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
@@ -272,9 +272,11 @@ function handle_page(string $page): never
                 }
             }
             usort($upcoming, fn($a, $b) => strcmp($a['date'], $b['date']));
+            $allTrades = array_merge(...array_map('array_values', $tradesBy ?: [[]]));
             render('dashboard', [
                 'portfolios' => $portfolios, 'data' => $data,
                 'snapshots' => $repo->snapshotsSum(array_column($portfolios, 'id')),
+                'flows' => Calc::flowMap($allTrades, prices()->usdIls()),
                 'bench' => $bench, 'upcoming' => array_slice($upcoming, 0, 12),
                 'pricedAt' => priced_at($quotes),
             ], 'תיקים');

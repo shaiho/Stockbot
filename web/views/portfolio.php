@@ -98,8 +98,8 @@ $pid = $p['id'];
     <div id="pchart" class="lchart"></div>
     <script>
     (() => {
-      const data = <?= json_encode($pts) ?>;
-      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'));
+      const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
+      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'), flows);
     })();
     </script>
   <?php endif; ?>

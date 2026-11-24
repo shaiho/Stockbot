@@ -35,8 +35,8 @@
 </section>
 <script>
 (() => {
-  const data = <?= json_encode($pts) ?>;
-  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'));
+  const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
+  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'), flows);
 })();
 </script>
 <div style="display:flex;gap:1.5rem;flex-wrap:wrap">

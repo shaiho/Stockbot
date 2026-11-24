@@ -88,6 +88,27 @@ final class Calc
         return [$c['ILS'], $c['USD']];
     }
 
+    /** Cumulative net external cash flow (deposits minus withdrawals), in ILS, keyed by date. */
+    public static function flowMap(array $trades, float $fx): array
+    {
+        $per = [];
+        foreach ($trades as $t) {
+            if ($t['asset_type'] !== 'cash' || !in_array($t['action'], ['deposit', 'withdraw'], true)) {
+                continue;
+            }
+            $d = self::localDate($t);
+            $amt = self::toIls($t['quantity'], $t['currency'], $fx) * ($t['action'] === 'deposit' ? 1 : -1);
+            $per[$d] = ($per[$d] ?? 0) + $amt;
+        }
+        ksort($per);
+        $cum = 0.0;
+        $out = [];
+        foreach ($per as $d => $amt) {
+            $out[$d] = $cum += $amt;
+        }
+        return $out;
+    }
+
     /** Quote keys needed to price a portfolio: open holdings + symbols traded today. */
     public static function quotePairs(array $trades): array
     {
