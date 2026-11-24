@@ -202,6 +202,7 @@ $pid = $p['id'];
 </section>
 <script>
 (() => {
+(() => {
   const rows = [...document.querySelectorAll('#trades-body tr')];
   const sym = document.getElementById('f-sym'), act = document.getElementById('f-act'),
         from = document.getElementById('f-from'), to = document.getElementById('f-to'),
@@ -221,6 +222,7 @@ $pid = $p['id'];
   };
   [sym, act, from, to].forEach(el => el.addEventListener('input', apply));
   document.getElementById('f-clear').addEventListener('click', () => { sym.value = act.value = from.value = to.value = ''; apply(); });
+})();
 })();
 </script>
 
@@ -291,6 +293,7 @@ $pid = $p['id'];
 </div>
 
 <script>
+(() => {
 const ov = document.getElementById('qt-overlay');
 const qtAct = document.getElementById('qt-act');
 const qtSync = () => {
@@ -397,4 +400,5 @@ document.getElementById('trade-form').addEventListener('submit', e => {
     if (qty > held) { alert('כמות מכירה גדולה מההחזקה (' + held + ')'); e.preventDefault(); }
   }
 });
+})();
 </script>

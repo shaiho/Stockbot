@@ -74,6 +74,7 @@ $actLabels = ['buy' => 'קנייה', 'sell' => 'מכירה'];
   </form>
 </div>
 <script>
+(() => {
 const oe = document.getElementById('oe-overlay');
 document.querySelectorAll('.edit-order').forEach(b => b.addEventListener('click', () => {
   document.getElementById('oe-title').textContent = b.dataset.id + ' · ' + b.dataset.symbol;
@@ -103,4 +104,5 @@ document.querySelectorAll('form.exec-order').forEach(f => f.addEventListener('su
   if (v === null) { e.preventDefault(); return; }
   inp.value = v;
 }));
+})();
 </script>

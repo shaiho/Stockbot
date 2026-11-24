@@ -100,6 +100,7 @@ function alert_detail(array $r, array $names): string
 </form>
 
 <script>
+(() => {
 const scope = document.getElementById('scope'), atype = document.getElementById('atype');
 function syncAlertForm() {
   [...atype.options].forEach(o => { o.hidden = o.disabled = o.dataset.scope !== scope.value; });
@@ -118,4 +119,5 @@ function syncAlertForm() {
 scope.addEventListener('change', syncAlertForm);
 atype.addEventListener('change', syncAlertForm);
 syncAlertForm();
+})();
 </script>
