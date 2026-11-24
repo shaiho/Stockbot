@@ -45,7 +45,7 @@ window.lwcRetheme = () => {
 };
 
 // Value chart: ₪ raw / ₪ adjusted (ex deposits) / % modes + range selector.
-window.mkValueChart = (el, data, legend, flows = {}) => {
+window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
   const chart = window.mkChart(el);
   const ilsFmt = v => '₪' + v.toLocaleString('he-IL', { maximumFractionDigits: 0 });
   const pctFmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
@@ -67,9 +67,12 @@ window.mkValueChart = (el, data, legend, flows = {}) => {
   const cumAt = t => { let c = 0; for (const k of fKeys) { if (k <= t) c = flows[k]; else break; } return c; };
   const adj = data.map(d => ({ time: d.time, value: d.value - cumAt(d.time) }));
 
-  let mode = 'adj', range = 'all';
   const RANGES = [['w', 'שבוע', 7], ['m', 'חודש', 30], ['q', 'רבעון', 92], ['y', 'שנה', 365], ['all', 'הכל', 0]];
   const MODES = [['ils', '₪'], ['adj', 'מתואם'], ['pct', '%']];
+  const saved = store && JSON.parse(localStorage.getItem('vc_' + store) || 'null');
+  let mode = saved && MODES.some(m => m[0] === saved.mode) ? saved.mode : 'adj';
+  let range = saved && RANGES.some(r => r[0] === saved.range) ? saved.range : 'all';
+  const persist = () => { if (store) localStorage.setItem('vc_' + store, JSON.stringify({ mode, range })); };
   const src = () => mode === 'pct' ? adj : (mode === 'adj' ? adj : data);
   const filtered = () => {
     const days = (RANGES.find(r => r[0] === range) || [])[2];
@@ -104,7 +107,7 @@ window.mkValueChart = (el, data, legend, flows = {}) => {
       b.className = 'link';
       b.textContent = label;
       b.style.fontWeight = id === cur() ? '700' : '400';
-      b.onclick = () => { set(id); g.querySelectorAll('button').forEach(x => x.style.fontWeight = x === b ? '700' : '400'); };
+      b.onclick = () => { set(id); persist(); g.querySelectorAll('button').forEach(x => x.style.fontWeight = x === b ? '700' : '400'); };
       g.appendChild(b);
     });
     return g;

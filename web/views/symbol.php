@@ -87,7 +87,10 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   const cur = mkt === 'IL' ? '₪' : '$';
   const tz = mkt === 'IL' ? 'Asia/Jerusalem' : 'America/New_York';
   const pf = v => cur + (v >= 100 ? v.toFixed(1) : v.toFixed(2));
-  let range = '1mo', kind = 'candles';
+  const savedSc = JSON.parse(localStorage.getItem('sc_' + sym) || 'null') || {};
+  let range = ['1d', '5d', '1mo'].includes(savedSc.range) ? savedSc.range : '1mo';
+  let kind = ['candles', 'line'].includes(savedSc.kind) ? savedSc.kind : 'candles';
+  const persistSc = () => localStorage.setItem('sc_' + sym, JSON.stringify({ range, kind }));
   const intra = () => range !== '1mo';
   const fmtT = ts => new Date(ts * 1000).toLocaleString('he-IL', intra()
     ? { timeZone: tz, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
@@ -188,9 +191,16 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     }
     chart.timeScale().fitContent();
   };
-  document.querySelectorAll('.chart-range').forEach(b => b.addEventListener('click', () => draw(b.dataset.range)));
+  document.querySelectorAll('.chart-range').forEach(b => {
+    b.style.fontWeight = b.dataset.range === range ? '700' : '400';
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.chart-range').forEach(x => x.style.fontWeight = x === b ? '700' : '400');
+      draw(b.dataset.range).then(persistSc);
+    });
+  });
   const setKind = k => {
     kind = k;
+    persistSc();
     candles.applyOptions({ visible: k === 'candles' });
     area.applyOptions({ visible: k === 'line' });
     document.getElementById('ct-c').style.fontWeight = k === 'candles' ? '700' : '400';
@@ -198,7 +208,8 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   };
   document.getElementById('ct-c').addEventListener('click', () => setKind('candles'));
   document.getElementById('ct-l').addEventListener('click', () => setKind('line'));
-  draw('1mo');
+  setKind(kind);
+  draw(range);
 })();
 </script>
 
