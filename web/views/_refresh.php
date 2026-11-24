@@ -14,21 +14,37 @@
 (() => {
   const box = document.getElementById('auto-refresh');
   const count = document.getElementById('refresh-count');
-  let end = 0, timer;
+  let end = 0;
+  const clear = () => { if (window.__arTimer) { clearInterval(window.__arTimer); window.__arTimer = 0; } };
+  const refresh = async () => {
+    count.textContent = 'מרענן…';
+    try {
+      const res = await fetch(box.dataset.url);
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const newMain = doc.querySelector('main');
+      const oldMain = document.querySelector('main');
+      if (!newMain || !oldMain) throw 0;
+      clear();
+      oldMain.innerHTML = newMain.innerHTML;
+      oldMain.querySelectorAll('script').forEach(s => {
+        const ns = document.createElement('script');
+        ns.textContent = s.textContent;
+        s.replaceWith(ns);
+      });
+      window.updateOrderBadge && window.updateOrderBadge();
+    } catch (e) {
+      location.href = box.dataset.url;
+    }
+  };
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
-    if (s <= 0) {
-      clearInterval(timer);
-      box.disabled = true;
-      location.href = box.dataset.url;
-      return;
-    }
+    if (s <= 0) { clear(); refresh(); return; }
     count.textContent = 'רענון בעוד ' + s + ' שנ׳';
   };
   const arm = () => {
-    clearInterval(timer);
+    clear();
     count.textContent = '';
-    if (box.checked) { end = Date.now() + 30000; timer = setInterval(tick, 250); tick(); }
+    if (box.checked) { end = Date.now() + 30000; window.__arTimer = setInterval(tick, 250); tick(); }
   };
   box.checked = localStorage.getItem('autoRefresh') === '1';
   box.addEventListener('change', () => { localStorage.setItem('autoRefresh', box.checked ? '1' : '0'); arm(); });
