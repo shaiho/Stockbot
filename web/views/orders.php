@@ -61,7 +61,6 @@ document.querySelectorAll('.edit-order').forEach(b => b.addEventListener('click'
   oe.hidden = false;
 }));
 document.getElementById('oe-cancel').addEventListener('click', () => { oe.hidden = true; });
-oe.addEventListener('click', e => { if (e.target === oe) oe.hidden = true; });
 document.querySelectorAll('form.exec-order').forEach(f => f.addEventListener('submit', e => {
   const inp = f.querySelector('[name=fill_price]');
   const v = prompt('מחיר ביצוע בפועל ליחידה:', inp.value);

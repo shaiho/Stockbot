@@ -38,7 +38,10 @@
   };
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
-    if (s <= 0) { clear(); refresh(); return; }
+    if (s <= 0) {
+      if (document.querySelector('.overlay:not([hidden])')) { end = Date.now() + 15000; return; }
+      clear(); refresh(); return;
+    }
     count.textContent = 'רענון בעוד ' + s + ' שנ׳';
   };
   const arm = () => {

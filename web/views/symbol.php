@@ -151,7 +151,6 @@ const openSq = (kind) => {
 document.getElementById('open-quick').addEventListener('click', () => openSq('trade_add'));
 document.getElementById('open-quick-order').addEventListener('click', () => openSq('order_add'));
 document.getElementById('sq-cancel').addEventListener('click', () => { sq.hidden = true; });
-sq.addEventListener('click', e => { if (e.target === sq) sq.hidden = true; });
 </script>
 
 <?php if (!$byPortfolio): ?>

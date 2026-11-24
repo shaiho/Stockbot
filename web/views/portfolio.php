@@ -300,7 +300,6 @@ document.querySelectorAll('.quick-add').forEach(b => b.addEventListener('click',
   ov.querySelector('[name=quantity]').focus();
 }));
 document.getElementById('qt-cancel').addEventListener('click', () => { ov.hidden = true; });
-ov.addEventListener('click', e => { if (e.target === ov) ov.hidden = true; });
 
 const hb = document.getElementById('holdings-body');
 if (hb) {
@@ -336,7 +335,6 @@ document.querySelectorAll('.quick-order').forEach(b => b.addEventListener('click
   qo.querySelector('[name=quantity]').focus();
 }));
 document.getElementById('qo-cancel').addEventListener('click', () => { qo.hidden = true; });
-qo.addEventListener('click', e => { if (e.target === qo) qo.hidden = true; });
 
 const FX = <?= json_encode($sum['fx']) ?>;
 const pcIn = ['pc-amount','pc-price','pc-cur','pc-qty','pc-avg'].map(id => document.getElementById(id));
