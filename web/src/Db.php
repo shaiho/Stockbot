@@ -24,11 +24,18 @@ final class Db
                 str_contains($url, 'supabase') ? 'require' : 'prefer'
             );
             $t0 = microtime(true);
-            self::$pdo = new PDO($dsn, urldecode($p['user'] ?? ''), urldecode($p['pass'] ?? ''), [
+            $user = urldecode($p['user'] ?? '');
+            $pass = urldecode($p['pass'] ?? '');
+            $opts = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_PERSISTENT => true,
-            ]);
+                PDO::ATTR_TIMEOUT => 10,
+            ];
+            try {
+                self::$pdo = new PDO($dsn, $user, $pass, $opts);
+            } catch (PDOException) {
+                self::$pdo = new PDO($dsn, $user, $pass, $opts);
+            }
             prof_add('db_connect', (microtime(true) - $t0) * 1000);
             self::$pdo->exec("SET TIME ZONE 'UTC'");
         }
