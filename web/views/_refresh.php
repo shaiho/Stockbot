@@ -16,12 +16,12 @@
   const count = document.getElementById('refresh-count');
   let end = 0;
   const clear = () => { if (window.__arTimer) { clearInterval(window.__arTimer); window.__arTimer = 0; } };
-  const refresh = async () => {
+  const refresh = async (fresh = false) => {
     count.textContent = 'מרענן…';
     const main = document.querySelector('main');
     main && main.classList.add('refreshing');
     try {
-      const res = await fetch(box.dataset.url);
+      const res = await fetch(fresh ? box.dataset.url : location.href.split('#')[0]);
       const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
       const newMain = doc.querySelector('main');
       const oldMain = document.querySelector('main');
@@ -40,7 +40,7 @@
   };
   document.getElementById('refresh-now').addEventListener('click', e => {
     e.preventDefault();
-    if (!document.querySelector('.overlay:not([hidden])')) { clear(); refresh(); }
+    if (!document.querySelector('.overlay:not([hidden])')) { clear(); refresh(true); }
   });
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
