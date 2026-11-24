@@ -86,14 +86,12 @@ function backfill_snapshots(array $p): array
         $fxMap[gmdate('Y-m-d', $ts)] = $c;
     }
 
-    $daySet = array_fill_keys(array_keys($events), true);
-    foreach ($closes as $m) {
-        $daySet += array_fill_keys(array_keys($m), true);
-    }
-    $daySet += array_fill_keys(array_keys($fxMap), true);
+    // Every calendar day — bot snapshots are daily; gaps break the summed dashboard chart.
     $today = date('Y-m-d');
-    $days = array_filter(array_keys($daySet), fn($d) => $d >= $first && $d <= $today);
-    sort($days);
+    $days = [];
+    for ($d = $first; $d <= $today; $d = date('Y-m-d', strtotime($d . ' +1 day'))) {
+        $days[] = $d;
+    }
     if (!$days) {
         return [[], 'לא נמצאו נתוני מחיר היסטוריים'];
     }
