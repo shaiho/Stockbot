@@ -28,6 +28,8 @@
       if (!newMain || !oldMain) throw 0;
       clear();
       oldMain.innerHTML = newMain.innerHTML;
+      oldMain.classList.remove('refreshing');
+      count.textContent = '';
       oldMain.querySelectorAll('script').forEach(s => {
         const ns = document.createElement('script');
         ns.textContent = s.textContent;
@@ -35,6 +37,8 @@
       });
       window.updateOrderBadge && window.updateOrderBadge();
     } catch (e) {
+      main && main.classList.remove('refreshing');
+      count.textContent = '';
       location.href = box.dataset.url;
     }
   };
