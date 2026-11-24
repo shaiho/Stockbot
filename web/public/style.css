@@ -83,3 +83,4 @@ label.inline { flex-direction: row; align-items: center; gap: .35rem; }
 .nav-badge { padding: 0 .4rem; border-radius: 999px; background: var(--accent, #2563eb); color: #fff; font-size: .8em; }
 .nav-search input { width: 7rem; padding: .2rem .5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); font-size: .9em; }
 .nav-search input:focus { width: 10rem; border-color: var(--accent); outline: none; transition: width .15s; }
+.lchart { width: 100%; max-width: 900px; height: 280px; direction: ltr; }

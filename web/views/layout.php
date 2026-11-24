@@ -9,6 +9,8 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="icon" href="icon-192.png">
 <script>const th = localStorage.getItem('theme'); if (th) document.documentElement.dataset.theme = th;</script>
+<script src="vendor/lightweight-charts.js"></script>
+<script src="charts.js"></script>
 </head>
 <body>
 <?php if (!empty($_SESSION['auth'])): ?>
@@ -54,6 +56,7 @@ document.getElementById('theme-toggle')?.addEventListener('click', () => {
   const next = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   localStorage.setItem('theme', next);
+  window.lwcRetheme && window.lwcRetheme();
 });
 </script>
 </body>

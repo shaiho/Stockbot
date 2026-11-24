@@ -66,13 +66,13 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
 <?php endif; ?>
 
 <section>
-  <h2>גרף מחיר</h2>
+  <h2>גרף מחיר <small id="schart-legend" class="muted"></small></h2>
   <div class="filter muted">
     <button type="button" class="link chart-range" data-range="1d">יום</button>
     <button type="button" class="link chart-range" data-range="5d">5 ימים</button>
     <button type="button" class="link chart-range" data-range="1mo">חודש</button>
   </div>
-  <div id="price-chart" style="width:100%;max-width:900px"></div>
+  <div id="price-chart" class="lchart"></div>
 </section>
 
 <script>
@@ -81,44 +81,62 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   const sym = <?= json_encode($symbol) ?>, mkt = <?= json_encode($market) ?>;
   const trades = <?= json_encode($tradeMarks) ?>;
   const avgCost = <?= json_encode($avgCost) ?>;
-  const draw = async (range) => {
-    box.textContent = 'טוען…';
-    const pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
-    if (!pts.length) { box.textContent = 'אין נתונים'; return; }
-    const W = 900, H = 260, pad = 40;
-    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const px = t => pad + (t - x0) / (x1 - x0 || 1) * (W - pad - 10);
-    const py = v => H - 10 - (v - y0) / (y1 - y0 || 1) * (H - pad);
-    const path = pts.map((p, i) => (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1)).join(' ');
-    const fmt = v => (v >= 100 ? v.toFixed(1) : v.toFixed(2));
-    const color = ys[ys.length - 1] >= ys[0] ? '#16a34a' : '#dc2626';
-    let marks = '';
+  const cur = mkt === 'IL' ? '₪' : '$';
+  const tz = mkt === 'IL' ? 'Asia/Jerusalem' : 'America/New_York';
+  const pf = v => cur + (v >= 100 ? v.toFixed(1) : v.toFixed(2));
+  let range = '1mo';
+  const intra = () => range !== '1mo';
+  const fmtT = ts => new Date(ts * 1000).toLocaleString('he-IL', intra()
+    ? { timeZone: tz, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { timeZone: tz, day: 'numeric', month: 'numeric', year: '2-digit' });
+  const chart = mkChart(box, {
+    localization: { locale: 'he-IL', timeFormatter: fmtT },
+    timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: fmtT, borderColor: '#e5e7eb', rightOffset: 2 },
+  });
+  const series = chart.addAreaSeries({
+    lineWidth: 2, lineColor: '#2563eb', topColor: 'rgba(37,99,235,.22)', bottomColor: 'rgba(37,99,235,0)',
+    priceFormat: { type: 'custom', formatter: pf, minMove: 0.01 },
+  });
+  let avgLine = null;
+  const legend = document.getElementById('schart-legend');
+  chart.subscribeCrosshairMove(p => {
+    if (!legend) return;
+    const v = p.seriesData && p.seriesData.get(series);
+    legend.textContent = v !== undefined && p.time !== undefined ? fmtT(p.time) + ' · ' + pf(v.value !== undefined ? v.value : v) : '';
+  });
+  const draw = async r => {
+    range = r;
+    box.style.opacity = '.4';
+    let pts = [];
+    try {
+      pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
+    } finally {
+      box.style.opacity = '';
+    }
+    const data = pts.map(p => ({ time: p[0], value: p[1] })).sort((a, b) => a.time - b.time);
+    series.setData(data);
+    const tset = data.map(d => d.time);
+    const nearest = t => tset.reduce((best, x) => Math.abs(x - t) < Math.abs(best - t) ? x : best, tset[0]);
+    const groups = {};
     trades.forEach(tr => {
-      if (tr.ts < x0 || tr.ts > x1) return;
-      const mx = px(tr.ts), my = py(tr.price);
-      const tip = `${tr.action === 'buy' ? 'קנייה' : 'מכירה'} ${tr.qty} יח׳ @ ${tr.price}\n${tr.date}`;
-      marks += tr.action === 'buy'
-        ? `<path d="M${mx} ${my - 6} l5 8 h-10 Z" fill="#16a34a"><title>${tip}</title></path>`
-        : `<path d="M${mx} ${my + 6} l5 -8 h-10 Z" fill="#dc2626"><title>${tip}</title></path>`;
+      if (!tset.length || tr.ts < tset[0] - 172800 || tr.ts > tset[tset.length - 1] + 172800) return;
+      const k = nearest(tr.ts);
+      (groups[k] = groups[k] || []).push(tr);
     });
-    let grid = '';
-    for (let i = 0; i <= 4; i++) {
-      const v = y0 + (y1 - y0) * i / 4, y = py(v);
-      grid += `<line x1="${pad}" y1="${y}" x2="${W}" y2="${y}" stroke="#e5e7eb"/><text x="2" y="${y + 4}" font-size="11" fill="#6b7280">${fmt(v)}</text>`;
+    const markers = [];
+    Object.entries(groups).forEach(([t, arr]) => {
+      const buys = arr.filter(x => x.action === 'buy'), sells = arr.filter(x => x.action !== 'buy');
+      if (buys.length) markers.push({ time: +t, position: 'belowBar', color: '#16a34a', shape: 'arrowUp', text: 'קניה ' + buys.length });
+      if (sells.length) markers.push({ time: +t, position: 'aboveBar', color: '#dc2626', shape: 'arrowDown', text: 'מכירה ' + sells.length });
+    });
+    markers.sort((a, b) => a.time - b.time);
+    series.setMarkers(markers);
+    if (avgLine) { series.removePriceLine(avgLine); avgLine = null; }
+    const ys = pts.map(p => p[1]);
+    if (avgCost > Math.min(...ys) && avgCost < Math.max(...ys)) {
+      avgLine = series.createPriceLine({ price: avgCost, color: '#7c3aed', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'עלות ממוצעת' });
     }
-    let avgLine = '';
-    if (avgCost > y0 && avgCost < y1) {
-      const ay = py(avgCost);
-      avgLine = `<line x1="${pad}" y1="${ay}" x2="${W}" y2="${ay}" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1"/>` +
-        `<text x="${pad + 4}" y="${ay - 4}" font-size="11" fill="#7c3aed">עלות ממוצעת ${fmt(avgCost)}</text>`;
-    }
-    const d0 = new Date(x0 * 1000), d1 = new Date(x1 * 1000);
-    const fd = d => d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">` + grid + avgLine +
-      `<text x="${W}" y="${H - 14}" font-size="11" fill="#6b7280" text-anchor="end">${fd(d0)}</text>` +
-      `<text x="${pad}" y="${H - 14}" font-size="11" fill="#6b7280">${fd(d1)}</text>` +
-      `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/>` + marks + `</svg>`;
+    chart.timeScale().fitContent();
   };
   document.querySelectorAll('.chart-range').forEach(b => b.addEventListener('click', () => draw(b.dataset.range)));
   draw('1mo');
