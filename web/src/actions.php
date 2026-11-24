@@ -49,6 +49,95 @@ function quote_exists(string $symbol, string $market): bool
     return (prices()->quotes([[$symbol, $market]])[Prices::key($symbol, $market)] ?? null) !== null;
 }
 
+/**
+ * Reconstruct daily portfolio value from trade history + Yahoo daily closes.
+ * @return array{0: array, 1: ?string} [rows of [date, total_ils], error message or null]
+ */
+function backfill_snapshots(array $p): array
+{
+    $trades = repo()->trades($p['id']);
+    if (!$trades) {
+        return [[], 'אין עסקאות לשחזור'];
+    }
+    $events = [];
+    $symbols = [];
+    $first = null;
+    foreach ($trades as $t) {
+        $d = Calc::localDate($t);
+        $first = $first === null || $d < $first ? $d : $first;
+        $events[$d][] = $t;
+        if ($t['asset_type'] !== 'cash') {
+            $symbols[$t['symbol']] = [$t['market'], $t['currency']];
+        }
+    }
+    $span = (time() - strtotime($first)) / 86400;
+    $range = $span > 3650 ? 'max' : ($span > 1825 ? '10y' : ($span > 800 ? '5y' : ($span > 380 ? '2y' : ($span > 190 ? '1y' : '6mo'))));
+
+    $closes = [];
+    foreach ($symbols as $sym => [$mkt]) {
+        $m = [];
+        foreach (prices()->chart($sym, $mkt, $range) as [$ts, $c]) {
+            $m[gmdate('Y-m-d', $ts)] = $c;
+        }
+        $closes[$sym] = $m;
+    }
+    $fxMap = [];
+    foreach (prices()->chart('USDILS=X', 'US', $range) as [$ts, $c]) {
+        $fxMap[gmdate('Y-m-d', $ts)] = $c;
+    }
+
+    $daySet = array_fill_keys(array_keys($events), true);
+    foreach ($closes as $m) {
+        $daySet += array_fill_keys(array_keys($m), true);
+    }
+    $daySet += array_fill_keys(array_keys($fxMap), true);
+    $today = date('Y-m-d');
+    $days = array_filter(array_keys($daySet), fn($d) => $d >= $first && $d <= $today);
+    sort($days);
+    if (!$days) {
+        return [[], 'לא נמצאו נתוני מחיר היסטוריים'];
+    }
+
+    $cash = ['ILS' => (float) $p['opening_cash_ils'], 'USD' => (float) $p['opening_cash_usd']];
+    $qty = array_fill_keys(array_keys($symbols), 0.0);
+    $last = [];
+    $lastFx = $fxMap ? (float) reset($fxMap) : prices()->usdIls();
+    $rows = [];
+    foreach ($days as $day) {
+        foreach ($events[$day] ?? [] as $t) {
+            $cur = $t['currency'] === 'ILS' ? 'ILS' : 'USD';
+            if ($t['asset_type'] === 'cash') {
+                $cash[$cur] += $t['action'] === 'deposit' ? $t['quantity'] : -$t['quantity'];
+                continue;
+            }
+            $gross = $t['quantity'] * $t['price'];
+            if ($t['action'] === 'buy') {
+                $cash[$cur] -= $gross + $t['commission'];
+                $qty[$t['symbol']] = ($qty[$t['symbol']] ?? 0) + $t['quantity'];
+            } else {
+                $cash[$cur] += $gross - $t['commission'];
+                if ($t['action'] === 'sell') {
+                    $qty[$t['symbol']] = ($qty[$t['symbol']] ?? 0) - $t['quantity'];
+                }
+            }
+        }
+        foreach ($closes as $sym => $m) {
+            if (isset($m[$day])) {
+                $last[$sym] = $m[$day];
+            }
+        }
+        $lastFx = $fxMap[$day] ?? $lastFx;
+        $total = $cash['ILS'] + $cash['USD'] * $lastFx;
+        foreach ($qty as $sym => $q) {
+            if ($q > 1e-9 && isset($last[$sym])) {
+                $total += $q * $last[$sym] * ($symbols[$sym][1] === 'ILS' ? 1.0 : $lastFx);
+            }
+        }
+        $rows[] = [$day, round($total, 2)];
+    }
+    return [$rows, null];
+}
+
 function handle_action(string $a): never
 {
     if ($a === 'login') {
@@ -228,6 +317,33 @@ function handle_action(string $a): never
             flash('ok', $kind === 'deposit' ? 'ההפקדה נשמרה' : 'המשיכה נשמרה');
             redirect($to);
 
+        case 'fx_convert':
+            $p = owned_portfolio((int) ($_POST['portfolio_id'] ?? 0));
+            $to = $back($p['id']);
+            $dir = $_POST['direction'] ?? '';
+            if (!in_array($dir, ['ils2usd', 'usd2ils'], true)) {
+                fail('כיוון המרה לא תקין', $to);
+            }
+            $amount = num($_POST['amount'] ?? '');
+            $rate = num($_POST['rate'] ?? '');
+            if ($amount === null || $amount <= 0 || $rate === null || $rate <= 0) {
+                fail('סכום/שער לא תקינים', $to);
+            }
+            try {
+                $ts = parse_trade_ts((string) ($_POST['date'] ?? ''));
+            } catch (DomainException $e) {
+                fail($e->getMessage() === 'future_date' ? 'תאריך עתידי אינו מותר' : 'תאריך לא תקין', $to);
+            }
+            [$fromCur, $toCur] = $dir === 'ils2usd' ? ['ILS', 'USD'] : ['USD', 'ILS'];
+            $toAmount = $dir === 'ils2usd' ? $amount / $rate : $amount * $rate;
+            [$ils, $usd] = Calc::cashBalances($p, $repo->trades($p['id']));
+            if (($fromCur === 'ILS' ? $ils : $usd) + 1e-9 < $amount) {
+                fail('אין מספיק מזומן להמרה', $to);
+            }
+            $repo->convertCash($p['id'], $fromCur, $toCur, $amount, round($toAmount, 2), $rate, $ts);
+            flash('ok', sprintf('הומרו %s %s → %s %s בשער %s', money($amount, $fromCur), $fromCur === 'ILS' ? '₪' : '$', money($toAmount, $toCur), $toCur === 'ILS' ? '₪' : '$', $rate));
+            redirect($to);
+
         case 'order_add':
             $p = owned_portfolio((int) ($_POST['portfolio_id'] ?? 0));
             $action = $_POST['action_type'] ?? '';
@@ -329,6 +445,14 @@ function handle_action(string $a): never
             }
             redirect('?p=orders');
 
+        case 'order_cancel_bulk':
+            $n = 0;
+            foreach ((array) ($_POST['order_ids'] ?? []) as $oid) {
+                $n += $repo->cancelOrder((int) $oid, $uid) ? 1 : 0;
+            }
+            flash('ok', $n ? sprintf('בוטלו %d הוראות', $n) : 'לא בוטלה אף הוראה');
+            redirect('?p=orders');
+
         case 'trade_update':
             $trade = $repo->trade((int) ($_POST['trade_id'] ?? 0), $uid);
             if (!$trade) {
@@ -408,7 +532,7 @@ function handle_action(string $a): never
                 fail('הסימול כבר ברשימת המעקב', '?p=watchlist');
             }
             flash('ok', 'נוסף לרשימת המעקב');
-            redirect('?p=watchlist');
+            redirect((string) ($_POST['back'] ?? '?p=watchlist'));
 
         case 'watch_remove':
             $repo->removeWatchlist((int) ($_POST['id'] ?? 0), $uid);
@@ -471,6 +595,17 @@ function handle_action(string $a): never
         case 'alert_delete':
             $repo->deleteAlertRule((int) ($_POST['id'] ?? 0), $uid);
             redirect('?p=alerts');
+
+        case 'snapshot_backfill':
+            $p = owned_portfolio((int) ($_POST['portfolio_id'] ?? 0));
+            set_time_limit(120);
+            [$rows, $err] = backfill_snapshots($p);
+            if ($err !== null) {
+                fail($err, '?p=portfolio&id=' . $p['id']);
+            }
+            $n = $repo->insertSnapshots($p['id'], $rows);
+            flash('ok', sprintf('שוחזרו %d נקודות שווי היסטוריות (מתוך %d מחושבות)', $n, count($rows)));
+            redirect('?p=portfolio&id=' . $p['id']);
 
         case 'settings_save':
             $user = $repo->user($uid);

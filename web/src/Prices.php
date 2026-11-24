@@ -99,14 +99,53 @@ final class Prices
         return $out;
     }
 
-    /** Past-year dividends and splits from Yahoo chart events. @return array{dividends:array,splits:array} */
+    private const EVENTS_TTL = 21600; // 6h
+
+    /** Dividends and splits from Yahoo chart events: past year + announced (up to ~3mo ahead). Cached 6h. */
     public function events(string $symbol, string $market): array
     {
-        if ($market === 'IL' && !str_ends_with($symbol, '.TA')) {
-            $symbol .= '.TA';
+        $key = 'events:' . strtoupper($symbol) . ':' . $market;
+        $c = $this->cached($key, true);
+        if ($c && time() - (int) $c['ts'] < self::EVENTS_TTL && isset($c['data'])) {
+            return $c['data'];
         }
-        $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol) . '?range=1y&interval=1d&events=div%2Csplit';
-        $body = $this->multiGet(['x' => $url])['x'] ?? null;
+        $sym = $market === 'IL' && !str_ends_with($symbol, '.TA') ? $symbol . '.TA' : $symbol;
+        $body = $this->multiGet(['x' => $this->eventsUrl($sym)])['x'] ?? null;
+        $data = self::parseEvents($body);
+        $this->store($key, ['ts' => time(), 'data' => $data]);
+        return $data;
+    }
+
+    /** Events for many (symbol, market) pairs; one curl-multi batch for the uncached. @return array<string,array> */
+    public function eventsFor(array $pairs): array
+    {
+        $out = $missing = [];
+        foreach ($pairs as [$symbol, $market]) {
+            $key = 'events:' . strtoupper($symbol) . ':' . $market;
+            $c = $this->cached($key, true);
+            if ($c && time() - (int) $c['ts'] < self::EVENTS_TTL && isset($c['data'])) {
+                $out[self::key($symbol, $market)] = $c['data'];
+            } else {
+                $missing[self::key($symbol, $market)] = $this->eventsUrl($market === 'IL' && !str_ends_with($symbol, '.TA') ? $symbol . '.TA' : $symbol);
+            }
+        }
+        foreach ($this->multiGet($missing) as $k => $body) {
+            [$symbol, $market] = explode(':', $k, 2);
+            $data = self::parseEvents($body);
+            $out[$k] = $data;
+            $this->store('events:' . strtoupper($symbol) . ':' . $market, ['ts' => time(), 'data' => $data]);
+        }
+        return $out;
+    }
+
+    private function eventsUrl(string $symbol): string
+    {
+        return 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol)
+            . '?period1=' . (time() - 366 * 86400) . '&period2=' . (time() + 92 * 86400) . '&interval=1d&events=div%2Csplit';
+    }
+
+    private static function parseEvents(?string $body): array
+    {
         $j = $body ? json_decode($body, true) : null;
         $ev = $j['chart']['result'][0]['events'] ?? [];
         $fmt = fn(array $e) => array_values(array_map(

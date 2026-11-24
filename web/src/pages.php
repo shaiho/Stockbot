@@ -97,6 +97,15 @@ function handle_page(string $page): never
         echo json_encode(['n' => count($repo->openOrders($uid))]);
         exit;
     }
+    if ($page === 'mkt_status') {
+        header('Content-Type: application/json');
+        $us = prices()->quotes([['SPY', 'US']])[Prices::key('SPY', 'US')]['session'] ?? 'closed';
+        $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Jerusalem'));
+        $dow = (int) $now->format('N'); $hm = (int) $now->format('Hi');
+        $il = ($dow <= 4 && $hm >= 1000 && $hm < 1730) ? 'regular' : 'closed';
+        echo json_encode(['us' => $us, 'il' => $il]);
+        exit;
+    }
     $fresh = ($_GET['refresh'] ?? '') === '1';
     process_orders($uid);
 
@@ -195,6 +204,16 @@ function handle_page(string $page): never
                 'pricedAt' => priced_at($quotes),
             ], $symbol);
 
+        case 'tax':
+            $p = owned_portfolio((int) ($_GET['id'] ?? 0));
+            $trades = $repo->trades($p['id']);
+            $years = array_values(array_unique(array_map(fn($t) => (int) substr(Calc::localDate($t), 0, 4), $trades)));
+            rsort($years);
+            $year = in_array((int) ($_GET['year'] ?? 0), $years, true) ? (int) $_GET['year'] : ($years[0] ?? (int) date('Y'));
+            $fx = prices()->usdIls();
+            render('tax', ['p' => $p, 'report' => Calc::taxReport($trades, $year, $fx), 'years' => $years], 'דוח מס');
+            break;
+
         case 'orders':
             $orders = $repo->pendingOrders($uid);
             $open = array_values(array_filter($orders, fn($o) => $o['status'] === 'open'));
@@ -231,9 +250,31 @@ function handle_page(string $page): never
         default:
             [$portfolios, $tradesBy] = $repo->portfoliosWithTrades($uid);
             [$data, $quotes] = $portfolios ? summaries($portfolios, $fresh, $tradesBy) : [[], []];
+            $bench = $portfolios ? prices()->quotes([['SPY', 'US'], ['TA35', 'IL']], $fresh) : [];
+            $syms = [];
+            foreach ($data as $d) {
+                foreach ($d['sum']['holdings'] as $r) {
+                    $syms[Prices::key($r['symbol'], $r['market'])] = [$r['symbol'], $r['market']];
+                }
+            }
+            $upcoming = [];
+            foreach (prices()->eventsFor(array_values($syms)) as $k => $ev) {
+                foreach ($ev['dividends'] as $e) {
+                    if ($e['date'] >= Calc::today()) {
+                        $upcoming[] = ['symbol' => explode(':', $k, 2)[0], 'date' => $e['date'], 'amount' => $e['amount']];
+                    }
+                }
+                foreach ($ev['splits'] as $e) {
+                    if ($e['date'] >= Calc::today()) {
+                        $upcoming[] = ['symbol' => explode(':', $k, 2)[0] . ' פיצול', 'date' => $e['date'], 'amount' => null, 'ratio' => $e['ratio']];
+                    }
+                }
+            }
+            usort($upcoming, fn($a, $b) => strcmp($a['date'], $b['date']));
             render('dashboard', [
                 'portfolios' => $portfolios, 'data' => $data,
                 'snapshots' => $repo->snapshotsSum(array_column($portfolios, 'id')),
+                'bench' => $bench, 'upcoming' => array_slice($upcoming, 0, 12),
                 'pricedAt' => priced_at($quotes),
             ], 'תיקים');
     }

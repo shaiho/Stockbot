@@ -14,6 +14,7 @@
 <?php if (!empty($_SESSION['auth'])): ?>
 <header class="top">
   <a class="brand" href="?p=dashboard">Stockbot</a>
+  <span id="mkt-dots" class="muted"></span>
   <nav>
     <a href="?p=dashboard">תיקים</a>
     <a href="?p=watchlist">מעקב</a>
@@ -42,6 +43,12 @@ window.updateOrderBadge = () => fetch('?p=order_count').then(r => r.json()).then
   document.getElementById('orders-badge').innerHTML = d.n > 0 ? '<span class="nav-badge">' + d.n + '</span>' : '';
 }).catch(() => {});
 window.updateOrderBadge();
+fetch('?p=mkt_status').then(r => r.json()).then(d => {
+  const cls = {regular: '🟢', pre: '🟡', post: '🟡', closed: '🔴'};
+  const lbl = {regular: 'מסחר', pre: 'פרה-מרקט', post: 'אפטר-מרקט', closed: 'סגור'};
+  document.getElementById('mkt-dots').innerHTML =
+    `US ${cls[d.us] || ''} <small>${lbl[d.us] || d.us}</small> · IL ${cls[d.il] || ''} <small>${lbl[d.il] || d.il}</small>`;
+}).catch(() => {});
 document.getElementById('theme-toggle')?.addEventListener('click', () => {
   const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const next = cur === 'dark' ? 'light' : 'dark';

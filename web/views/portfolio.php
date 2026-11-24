@@ -25,12 +25,14 @@ $pid = $p['id'];
   <div class="scroll"><table>
     <thead><tr>
       <th data-sort="symbol" data-type="t">סימול</th><th data-sort="quantity">כמות</th><th data-sort="avg_cost">עלות ממוצעת</th><th data-sort="price">מחיר</th>
-      <th data-sort="change_pct">יומי %</th><th data-sort="daily">שינוי יומי</th><th data-sort="value" class="sortable">שווי</th>
+      <th data-sort="change_pct">יומי %</th><th data-sort="daily">שינוי יומי</th><th data-sort="value" class="sortable">שווי</th><th data-sort="weight">משקל %</th>
       <th data-sort="unrealized">שינוי מקנייה</th><th data-sort="unrealized_pct">שינוי מקנייה %</th><th data-sort="realized">ממומש</th><th data-sort="commissions">עמלות</th><th></th>
     </tr></thead>
     <tbody id="holdings-body">
-    <?php foreach ($sum['holdings'] as $r): $c = $r['currency']; ?>
-      <tr data-symbol="<?= h($r['symbol']) ?>" data-quantity="<?= $r['quantity'] ?>" data-avg_cost="<?= $r['avg_cost'] ?>" data-price="<?= (string) ($r['price'] ?? '') ?>" data-change_pct="<?= (string) ($r['change_pct'] ?? '') ?>" data-daily="<?= (string) ($r['daily'] ?? '') ?>" data-value="<?= (string) ($r['value'] ?? '') ?>" data-unrealized="<?= $r['unrealized'] ?>" data-unrealized_pct="<?= (string) ($r['unrealized_pct'] ?? '') ?>" data-realized="<?= $r['realized'] ?>" data-commissions="<?= $r['commissions'] ?>">
+    <?php foreach ($sum['holdings'] as $r): $c = $r['currency'];
+      $valueIls = $r['value'] !== null ? $r['value'] * ($c === 'ILS' ? 1 : $sum['fx']) : null;
+      $weight = $valueIls !== null && $sum['total_ils'] > 0 ? $valueIls / $sum['total_ils'] * 100 : null; ?>
+      <tr data-symbol="<?= h($r['symbol']) ?>" data-quantity="<?= $r['quantity'] ?>" data-avg_cost="<?= $r['avg_cost'] ?>" data-price="<?= (string) ($r['price'] ?? '') ?>" data-change_pct="<?= (string) ($r['change_pct'] ?? '') ?>" data-daily="<?= (string) ($r['daily'] ?? '') ?>" data-value="<?= (string) ($r['value'] ?? '') ?>" data-weight="<?= (string) ($weight ?? '') ?>" data-unrealized="<?= $r['unrealized'] ?>" data-unrealized_pct="<?= (string) ($r['unrealized_pct'] ?? '') ?>" data-realized="<?= $r['realized'] ?>" data-commissions="<?= $r['commissions'] ?>">
         <td><a href="?p=symbol&symbol=<?= h($r['symbol']) ?>&market=<?= h($r['market']) ?>"><b><?= h($r['symbol']) ?></b></a> <small class="muted"><?= h($r['market']) ?></small></td>
         <td><?= qty($r['quantity']) ?></td>
         <td><?= money($r['avg_cost'], $c) ?></td>
@@ -38,6 +40,7 @@ $pid = $p['id'];
         <td class="<?= tone($r['change_pct']) ?>"><?= pct($r['change_pct']) ?></td>
         <td class="<?= tone($r['daily']) ?>"><?= $r['daily'] === null ? '—' : money($r['daily'], $c, true) ?></td>
         <td><?= $r['value'] === null ? '—' : money($r['value'], $c) ?></td>
+        <td><?= $weight === null ? '—' : number_format($weight, 1) . '%' ?></td>
         <td class="<?= tone($r['unrealized']) ?>"><?= $r['price'] === null ? '—' : money($r['unrealized'], $c, true) ?></td>
         <td class="<?= tone($r['unrealized_pct']) ?>"><?= pct($r['unrealized_pct']) ?></td>
         <td class="<?= tone($r['realized']) ?>"><?= money($r['realized'], $c, true) ?></td>
@@ -139,6 +142,7 @@ $pid = $p['id'];
     <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור</button>
+    <button type="button" class="link" id="open-fx">המרת ₪⇄$</button>
   </form>
 
   <div class="card form">
@@ -166,7 +170,7 @@ $pid = $p['id'];
 </section>
 
 <section>
-  <h2>היסטוריית עסקאות <small class="muted">(<?= count($trades) ?>)</small> <small><a href="?p=export&id=<?= $pid ?>">ייצוא CSV</a></small></h2>
+  <h2>היסטוריית עסקאות <small class="muted">(<?= count($trades) ?>)</small> <small><a href="?p=export&id=<?= $pid ?>">ייצוא CSV</a> · <a href="?p=tax&id=<?= $pid ?>">דוח מס</a></small></h2>
   <div class="filter muted">
     סינון: <input id="f-sym" placeholder="סימול" size="8">
     <select id="f-act">
@@ -259,11 +263,25 @@ $pid = $p['id'];
     <div class="card form">
       <h3>פעולות</h3>
       <form method="post" action="?a=portfolio_recalc" data-confirm="לחשב מחדש את העמלות בכל העסקאות?"><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button>חשב עמלות מחדש לכל העסקאות</button></form>
+      <form method="post" action="?a=snapshot_backfill" data-confirm="לשחזר היסטוריית שווי מעסקאות + מחירים היסטוריים? (נתונים קיימים לא יימחקו)"><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button>שחזר היסטוריית שווי</button></form>
       <form method="post" action="?a=portfolio_clear_trades" data-confirm="למחוק את כל העסקאות בתיק? לא ניתן לשחזר."><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button class="danger">מחק את כל העסקאות</button></form>
       <form method="post" action="?a=portfolio_delete" data-confirm="למחוק את התיק כולו? לא ניתן לשחזר."><?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>"><button class="danger">מחק תיק</button></form>
     </div>
   </div>
 </section>
+
+<div id="fx-overlay" class="overlay" hidden>
+  <form class="card form" method="post" action="?a=fx_convert">
+    <h2>המרת מט"ח</h2>
+    <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
+    <label>כיוון <select name="direction" id="fx-dir"><option value="ils2usd">₪ שקלים → $ דולרים</option><option value="usd2ils">$ דולרים → ₪ שקלים</option></select></label>
+    <label><span id="fx-amt-label">סכום ₪</span> <input name="amount" id="fx-amount" inputmode="decimal" required></label>
+    <label>שער (₪ לדולר) <input name="rate" id="fx-rate" inputmode="decimal" value="<?= h((string) ($sum['fx'] ?? '')) ?>" required></label>
+    <p class="muted" id="fx-out">יתקבל: —</p>
+    <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
+    <button class="primary">בצע המרה</button> <button type="button" id="fx-cancel">ביטול</button>
+  </form>
+</div>
 
 <div id="qt-overlay" class="overlay" hidden>
   <form class="card form" method="post" action="?a=trade_add">
@@ -400,5 +418,19 @@ document.getElementById('trade-form').addEventListener('submit', e => {
     if (qty > held) { alert('כמות מכירה גדולה מההחזקה (' + held + ')'); e.preventDefault(); }
   }
 });
+
+const fx = document.getElementById('fx-overlay');
+const fxDir = document.getElementById('fx-dir'), fxAmt = document.getElementById('fx-amount'), fxRate = document.getElementById('fx-rate');
+const fxCalc = () => {
+  const a = parseFloat(fxAmt.value || '0'), r = parseFloat(fxRate.value || '0');
+  const isIls = fxDir.value === 'ils2usd';
+  document.getElementById('fx-amt-label').textContent = isIls ? 'סכום ₪' : 'סכום $';
+  document.getElementById('fx-out').textContent = 'יתקבל: ' +
+    (a > 0 && r > 0 ? (isIls ? (a / r).toFixed(2) + ' $' : '₪ ' + (a * r).toFixed(2)) : '—');
+};
+[fxDir, fxAmt, fxRate].forEach(el => el.addEventListener('input', fxCalc));
+fxDir.addEventListener('change', fxCalc);
+document.getElementById('open-fx').addEventListener('click', () => { fx.hidden = false; fxCalc(); fxAmt.focus(); });
+document.getElementById('fx-cancel').addEventListener('click', () => { fx.hidden = true; });
 })();
 </script>

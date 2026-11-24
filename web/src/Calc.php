@@ -377,4 +377,41 @@ final class Calc
         }
         return $end - $start - $flow;
     }
+
+    /** Year-scoped realized P&L report (parity with bot compute_tax_report): avg cost buckets within the year only. */
+    public static function taxReport(array $trades, int $year, float $fx): array
+    {
+        $buckets = [];
+        $totalCommIls = 0.0;
+        foreach ($trades as $t) {
+            if ((int) substr(self::localDate($t), 0, 4) !== $year || $t['asset_type'] === 'cash') {
+                continue;
+            }
+            $key = strtoupper($t['symbol']);
+            $buckets[$key] ??= ['qty' => 0.0, 'cost' => 0.0, 'realized' => 0.0];
+            $b = &$buckets[$key];
+            $totalCommIls += self::toIls($t['commission'], $t['currency'], $fx);
+            if ($t['action'] === 'buy') {
+                $b['cost'] += $t['quantity'] * $t['price'] + $t['commission'];
+                $b['qty'] += $t['quantity'];
+            } elseif ($t['action'] === 'sell' && $b['qty'] > 0) {
+                $avg = $b['cost'] / $b['qty'];
+                $b['realized'] += self::toIls(($t['price'] - $avg) * $t['quantity'] - $t['commission'], $t['currency'], $fx);
+                $b['cost'] -= $avg * $t['quantity'];
+                $b['qty'] -= $t['quantity'];
+            } elseif ($t['action'] === 'dividend') {
+                $b['realized'] += self::toIls($t['quantity'] * $t['price'] - $t['commission'], $t['currency'], $fx);
+            }
+            unset($b);
+        }
+        $bySymbol = array_filter(array_map(fn($b) => $b['realized'], $buckets), fn($v) => abs($v) > self::EPS);
+        arsort($bySymbol, SORT_NUMERIC);
+        $gross = array_sum($bySymbol);
+        $taxable = $gross - $totalCommIls;
+        return [
+            'year' => $year, 'gross' => $gross, 'commissions' => $totalCommIls,
+            'taxable' => $taxable, 'tax' => max($taxable, 0.0) * 0.25, 'net' => $taxable - max($taxable, 0.0) * 0.25,
+            'by_symbol' => $bySymbol,
+        ];
+    }
 }

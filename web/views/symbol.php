@@ -39,6 +39,9 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
 <p>
   <button type="button" class="link" id="open-quick" data-kind="trade_add">+ עסקה</button>
   <button type="button" class="link" id="open-quick-order" data-kind="order_add">הוראה</button>
+  <?php if (!$watch): ?>
+  <form method="post" action="?a=watch_add" class="inline"><?= csrf_field() ?><input type="hidden" name="symbol" value="<?= h($symbol) ?>"><input type="hidden" name="market" value="<?= h($market) ?>"><input type="hidden" name="back" value="<?= h($_SERVER['REQUEST_URI']) ?>"><button class="link">+ מעקב</button></form>
+  <?php endif; ?>
 </p>
 <?php require __DIR__ . '/_refresh.php'; ?>
 
@@ -122,14 +125,34 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
 })();
 </script>
 
-<?php if ($events['dividends'] || $events['splits']): ?>
+<?php
+$today = date('Y-m-d');
+$upDiv = array_values(array_filter($events['dividends'], fn($e) => $e['date'] >= $today));
+$upSplit = array_values(array_filter($events['splits'], fn($e) => $e['date'] >= $today));
+$pastDiv = array_values(array_filter($events['dividends'], fn($e) => $e['date'] < $today));
+$pastSplit = array_values(array_filter($events['splits'], fn($e) => $e['date'] < $today));
+?>
+<?php if ($upDiv || $upSplit): ?>
+<section>
+  <h2>אירועים קרובים</h2>
+  <p>
+    <?php foreach ($upDiv as $e): ?>
+      <span class="chip warn">דיבידנד · <?= h($e['date']) ?> · <?= number_format($e['amount'], 4) ?></span>
+    <?php endforeach; ?>
+    <?php foreach ($upSplit as $e): ?>
+      <span class="chip warn">פיצול <?= h((string) $e['ratio']) ?> · <?= h($e['date']) ?></span>
+    <?php endforeach; ?>
+  </p>
+</section>
+<?php endif; ?>
+<?php if ($pastDiv || $pastSplit): ?>
 <section>
   <h2>אירועים בשנה האחרונה</h2>
   <p>
-    <?php foreach (array_reverse($events['dividends']) as $e): ?>
+    <?php foreach (array_reverse($pastDiv) as $e): ?>
       <span class="chip">דיבידנד · <?= h($e['date']) ?> · <?= number_format($e['amount'], 4) ?></span>
     <?php endforeach; ?>
-    <?php foreach (array_reverse($events['splits']) as $e): ?>
+    <?php foreach (array_reverse($pastSplit) as $e): ?>
       <span class="chip">פיצול <?= h((string) $e['ratio']) ?> · <?= h($e['date']) ?></span>
     <?php endforeach; ?>
   </p>

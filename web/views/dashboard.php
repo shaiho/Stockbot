@@ -22,6 +22,9 @@
   <?php foreach ($portfolios as $p): $s = $data[$p['id']]['sum']; ?>
     <a class="chip <?= tone($s['daily_change_ils']) ?>" href="?p=portfolio&id=<?= $p['id'] ?>"><?= h($p['name']) ?> <?= money($s['daily_change_ils'], 'ILS', true) ?></a>
   <?php endforeach; ?>
+  <?php foreach ([['SPY', 'US', 'SPY'], ['TA35', 'IL', 'TA-35']] as [$bs, $bm, $bl]): $bq = $bench[Prices::key($bs, $bm)] ?? null; ?>
+    <?php if ($bq && $bq['price']): ?><span class="chip <?= tone($bq['change_pct']) ?>" title="<?= h($bl) ?>"><?= h($bl) ?> <?= pct($bq['change_pct']) ?></span><?php endif; ?>
+  <?php endforeach; ?>
 </p>
 <?php if (count($snapshots) >= 2):
     $pts = array_map(fn($s) => [$s['date'], (float) $s['total_ils']], $snapshots);
@@ -41,6 +44,14 @@
   </svg>
 </section>
 <?php endif; ?>
+<?php endif; ?>
+
+<?php if (!empty($upcoming)): ?>
+<p class="muted">אירועים קרובים:
+  <?php foreach ($upcoming as $e): ?>
+    <span class="chip warn"><?= h($e['symbol']) ?> · <?= h($e['date']) ?><?= $e['amount'] !== null ? ' · ' . number_format($e['amount'], 3) : '' ?></span>
+  <?php endforeach; ?>
+</p>
 <?php endif; ?>
 
 <div class="grid">

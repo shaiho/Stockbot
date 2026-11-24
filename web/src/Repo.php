@@ -307,6 +307,23 @@ final class Repo
         }
     }
 
+    /** Backfill daily snapshots; existing (portfolio_id,date) rows are kept. Returns inserted count. */
+    public function insertSnapshots(int $portfolioId, array $rows): int
+    {
+        $n = 0;
+        foreach (array_chunk($rows, 200) as $chunk) {
+            $marks = implode(',', array_fill(0, count($chunk), '(?,?,?)'));
+            $args = [];
+            foreach ($chunk as [$date, $total]) {
+                $args[] = $portfolioId;
+                $args[] = $date;
+                $args[] = $total;
+            }
+            $n += $this->run("INSERT INTO portfolio_snapshots (portfolio_id, date, total_ils) VALUES $marks ON CONFLICT (portfolio_id, date) DO NOTHING", $args)->rowCount();
+        }
+        return $n;
+    }
+
     public function watchlist(int $userId): array
     {
         return $this->run('SELECT * FROM watchlist WHERE user_id = ? ORDER BY symbol', [$userId])->fetchAll();
@@ -393,6 +410,21 @@ final class Repo
             $this->run('UPDATE pending_orders SET executed_trade_id = ? WHERE id = ?', [$tid, $id]);
             $this->db->commit();
             return $tid;
+        } catch (Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    /** Currency conversion: withdraw `fromAmount` of `fromCur`, deposit `toAmount` of `toCur` atomically. */
+    public function convertCash(int $portfolioId, string $fromCur, string $toCur, float $fromAmount, float $toAmount, float $rate, ?DateTimeInterface $ts): void
+    {
+        $this->db->beginTransaction();
+        try {
+            $note = sprintf('המרת %s→%s בשער %s', $fromCur, $toCur, rtrim(rtrim(number_format($rate, 4, '.', ''), '0'), '.'));
+            $this->addCash($portfolioId, 'withdraw', $fromCur, $fromAmount, $note, $ts);
+            $this->addCash($portfolioId, 'deposit', $toCur, $toAmount, $note, $ts);
+            $this->db->commit();
         } catch (Throwable $e) {
             $this->db->rollBack();
             throw $e;
