@@ -16,12 +16,15 @@
   const count = document.getElementById('refresh-count');
   let end = 0;
   const clear = () => { if (window.__arTimer) { clearInterval(window.__arTimer); window.__arTimer = 0; } };
-  const refresh = async (fresh = false) => {
-    count.textContent = 'מרענן…';
+  let busy = false;
+  const refresh = async (silent = false) => {
+    if (busy) { end = Date.now() + 15000; return; }
+    busy = true;
     const main = document.querySelector('main');
-    main && main.classList.add('refreshing');
+    count.textContent = 'מרענן…';
+    if (!silent) { main && main.classList.add('refreshing'); }
     try {
-      const res = await fetch(fresh ? box.dataset.url : location.href.split('#')[0]);
+      const res = await fetch(box.dataset.url);
       const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
       const newMain = doc.querySelector('main');
       const oldMain = document.querySelector('main');
@@ -40,17 +43,19 @@
       main && main.classList.remove('refreshing');
       count.textContent = '';
       location.href = box.dataset.url;
+    } finally {
+      busy = false;
     }
   };
   document.getElementById('refresh-now').addEventListener('click', e => {
     e.preventDefault();
-    if (!document.querySelector('.overlay:not([hidden])')) { clear(); refresh(true); }
+    if (!document.querySelector('.overlay:not([hidden])')) { clear(); refresh(false); }
   });
   const tick = () => {
     const s = Math.ceil((end - Date.now()) / 1000);
     if (s <= 0) {
       if (document.querySelector('.overlay:not([hidden])')) { end = Date.now() + 15000; return; }
-      clear(); refresh(); return;
+      clear(); refresh(true); return;
     }
     count.textContent = 'רענון בעוד ' + s + ' שנ׳';
   };
