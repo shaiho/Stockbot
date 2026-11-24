@@ -112,7 +112,23 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   candles.priceScale().applyOptions({ scaleMargins: { top: 0.04, bottom: 0.17 } });
   const main = () => kind === 'candles' ? candles : area;
   const legend = document.getElementById('schart-legend');
+  let groups = {};
+  box.style.position = 'relative';
+  const tip = document.createElement('div');
+  tip.style.cssText = 'position:absolute;display:none;z-index:5;background:var(--card,#fff);border:1px solid var(--line,#ccc);border-radius:6px;padding:.4rem .6rem;font-size:.85em;pointer-events:none;direction:rtl;text-align:right;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap';
+  box.appendChild(tip);
   chart.subscribeCrosshairMove(p => {
+    const grp = p.time !== undefined ? groups[p.time] : null;
+    if (grp) {
+      tip.innerHTML = grp.map(tr =>
+        `${tr.action === 'buy' ? '🟢 קניה' : '🔴 מכירה'} <b>${tr.qty}</b> יח׳ @ <b>${pf(tr.price)}</b><br><small class="muted">${tr.date}</small>`
+      ).join('<br>');
+      tip.style.display = 'block';
+      tip.style.left = Math.min(p.point.x + 14, box.clientWidth - tip.offsetWidth - 8) + 'px';
+      tip.style.top = Math.max(p.point.y + 8, 0) + 'px';
+    } else {
+      tip.style.display = 'none';
+    }
     if (!legend) return;
     const v = p.seriesData && p.seriesData.get(main());
     if (v === undefined || p.time === undefined) { legend.textContent = ''; return; }
@@ -149,7 +165,7 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     // trade markers snapped to nearest bar
     const tset = data.map(d => d.time);
     const nearest = t => tset.reduce((best, x) => Math.abs(x - t) < Math.abs(best - t) ? x : best, tset[0]);
-    const groups = {};
+    groups = {};
     trades.forEach(tr => {
       if (!tset.length || tr.ts < tset[0] - 172800 || tr.ts > tset[tset.length - 1] + 172800) return;
       const k = nearest(tr.ts);
