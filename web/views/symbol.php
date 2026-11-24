@@ -71,6 +71,9 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     <button type="button" class="link chart-range" data-range="1d">יום</button>
     <button type="button" class="link chart-range" data-range="5d">5 ימים</button>
     <button type="button" class="link chart-range" data-range="1mo">חודש</button>
+    <span class="muted">·</span>
+    <button type="button" class="link" id="ct-c" style="font-weight:700">נרות</button>
+    <button type="button" class="link" id="ct-l">קו</button>
   </div>
   <div id="price-chart" class="lchart"></div>
 </section>
@@ -84,7 +87,7 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   const cur = mkt === 'IL' ? '₪' : '$';
   const tz = mkt === 'IL' ? 'Asia/Jerusalem' : 'America/New_York';
   const pf = v => cur + (v >= 100 ? v.toFixed(1) : v.toFixed(2));
-  let range = '1mo';
+  let range = '1mo', kind = 'candles';
   const intra = () => range !== '1mo';
   const fmtT = ts => new Date(ts * 1000).toLocaleString('he-IL', intra()
     ? { timeZone: tz, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
@@ -93,28 +96,57 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     localization: { locale: 'he-IL', timeFormatter: fmtT },
     timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: fmtT, borderColor: '#e5e7eb', rightOffset: 2 },
   });
-  const series = chart.addAreaSeries({
-    lineWidth: 2, lineColor: '#2563eb', topColor: 'rgba(37,99,235,.22)', bottomColor: 'rgba(37,99,235,0)',
-    priceFormat: { type: 'custom', formatter: pf, minMove: 0.01 },
+  const pfO = { type: 'custom', formatter: pf, minMove: 0.01 };
+  const extOpt = { lineColor: '#94a3b8', lineWidth: 1, topColor: 'rgba(148,163,184,.2)', bottomColor: 'rgba(148,163,184,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+  const extPre = chart.addAreaSeries(extOpt), extPost = chart.addAreaSeries(extOpt);
+  const candles = chart.addCandlestickSeries({
+    upColor: '#16a34a', downColor: '#dc2626', borderVisible: false,
+    wickUpColor: '#16a34a', wickDownColor: '#dc2626', priceFormat: pfO,
   });
-  let avgLine = null;
+  const area = chart.addAreaSeries({
+    lineWidth: 2, lineColor: '#2563eb', topColor: 'rgba(37,99,235,.22)', bottomColor: 'rgba(37,99,235,0)',
+    visible: false, priceFormat: pfO,
+  });
+  const vol = chart.addHistogramSeries({ priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale('').applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
+  candles.priceScale().applyOptions({ scaleMargins: { top: 0.04, bottom: 0.17 } });
+  const main = () => kind === 'candles' ? candles : area;
   const legend = document.getElementById('schart-legend');
   chart.subscribeCrosshairMove(p => {
     if (!legend) return;
-    const v = p.seriesData && p.seriesData.get(series);
-    legend.textContent = v !== undefined && p.time !== undefined ? fmtT(p.time) + ' · ' + pf(v.value !== undefined ? v.value : v) : '';
+    const v = p.seriesData && p.seriesData.get(main());
+    if (v === undefined || p.time === undefined) { legend.textContent = ''; return; }
+    legend.textContent = v.open !== undefined
+      ? `${fmtT(p.time)} · פ ${pf(v.open)} · ג ${pf(v.high)} · נ ${pf(v.low)} · ס ${pf(v.close)}`
+      : fmtT(p.time) + ' · ' + pf(v.value !== undefined ? v.value : v);
   });
+  let avgLines = [];
   const draw = async r => {
     range = r;
     box.style.opacity = '.4';
-    let pts = [];
+    let bars = [];
     try {
-      pts = await (await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}`)).json();
+      bars = await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=${range}&ohlc=1`).then(x => x.json());
     } finally {
       box.style.opacity = '';
     }
-    const data = pts.map(p => ({ time: p[0], value: p[1] })).sort((a, b) => a.time - b.time);
-    series.setData(data);
+    const data = bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], vol: b[5] })).sort((a, b) => a.time - b.time);
+    candles.setData(data);
+    area.setData(data.map(d => ({ time: d.time, value: d.close })));
+    vol.setData(data.map(d => ({ time: d.time, value: d.vol, color: d.close >= d.open ? 'rgba(22,163,74,.4)' : 'rgba(220,38,38,.4)' })));
+    // extended-session shading for US intraday (series stay under candles)
+    if (range === '1d' && mkt === 'US') {
+      const etMin = t => {
+        const d = new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false }).split(':');
+        return (+d[0]) * 60 + (+d[1]);
+      };
+      extPre.setData(data.filter(d => etMin(d.time) < 570).map(d => ({ time: d.time, value: d.close })));
+      extPost.setData(data.filter(d => etMin(d.time) >= 960).map(d => ({ time: d.time, value: d.close })));
+    } else {
+      extPre.setData([]);
+      extPost.setData([]);
+    }
+    // trade markers snapped to nearest bar
     const tset = data.map(d => d.time);
     const nearest = t => tset.reduce((best, x) => Math.abs(x - t) < Math.abs(best - t) ? x : best, tset[0]);
     const groups = {};
@@ -130,15 +162,26 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
       if (sells.length) markers.push({ time: +t, position: 'aboveBar', color: '#dc2626', shape: 'arrowDown', text: 'מכירה ' + sells.length });
     });
     markers.sort((a, b) => a.time - b.time);
-    series.setMarkers(markers);
-    if (avgLine) { series.removePriceLine(avgLine); avgLine = null; }
-    const ys = pts.map(p => p[1]);
-    if (avgCost > Math.min(...ys) && avgCost < Math.max(...ys)) {
-      avgLine = series.createPriceLine({ price: avgCost, color: '#7c3aed', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'עלות ממוצעת' });
+    candles.setMarkers(markers);
+    area.setMarkers(markers);
+    avgLines.forEach(([s, l]) => s.removePriceLine(l));
+    avgLines = [];
+    const ys = data.map(d => d.close);
+    if (ys.length && avgCost > Math.min(...ys) && avgCost < Math.max(...ys)) {
+      [candles, area].forEach(s => avgLines.push([s, s.createPriceLine({ price: avgCost, color: '#7c3aed', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'עלות ממוצעת' })]));
     }
     chart.timeScale().fitContent();
   };
   document.querySelectorAll('.chart-range').forEach(b => b.addEventListener('click', () => draw(b.dataset.range)));
+  const setKind = k => {
+    kind = k;
+    candles.applyOptions({ visible: k === 'candles' });
+    area.applyOptions({ visible: k === 'line' });
+    document.getElementById('ct-c').style.fontWeight = k === 'candles' ? '700' : '400';
+    document.getElementById('ct-l').style.fontWeight = k === 'line' ? '700' : '400';
+  };
+  document.getElementById('ct-c').addEventListener('click', () => setKind('candles'));
+  document.getElementById('ct-l').addEventListener('click', () => setKind('line'));
   draw('1mo');
 })();
 </script>
@@ -217,7 +260,7 @@ document.getElementById('sq-cancel').addEventListener('click', () => { sq.hidden
 <?php foreach ($byPortfolio as $pid => $r): $pnl = $r['pnl']; $c = $pnl['currency']; ?>
 <section>
   <h2><a href="?p=portfolio&id=<?= $pid ?>"><?= h($r['name']) ?></a></h2>
-  <div class="scroll"><table>
+  <div class="scroll"><table class="sortable">
     <thead><tr><th>כמות</th><th>עלות ממוצעת</th><th>שווי</th><th>שינוי יומי</th><th>שינוי מקנייה</th><th>שינוי מקנייה %</th><th>ממומש</th><th>עמלות</th><th>דיבידנדים</th></tr></thead>
     <tbody><tr>
       <td><?= qty($pnl['quantity']) ?></td>
@@ -238,7 +281,7 @@ document.getElementById('sq-cancel').addEventListener('click', () => { sq.hidden
     </tr></tbody>
   </table></div>
 
-  <div class="scroll"><table>
+  <div class="scroll"><table class="sortable">
     <thead><tr><th>#</th><th>תאריך</th><th>פעולה</th><th>כמות</th><th>מחיר</th><th>עמלה</th><th>הערה</th><th></th></tr></thead>
     <tbody>
     <?php foreach (array_reverse($r['trades']) as $t): ?>

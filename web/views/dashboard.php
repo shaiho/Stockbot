@@ -36,7 +36,33 @@
 <script>
 (() => {
   const data = <?= json_encode($pts) ?>;
-  mkAreaChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'));
+  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'));
+})();
+</script>
+<div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+  <div style="flex:1;min-width:280px"><h3 class="muted">SPY · חודש</h3><div id="spy-chart" class="mini-chart"></div></div>
+  <div style="flex:1;min-width:280px"><h3 class="muted">TA-35 · חודש</h3><div id="ta-chart" class="mini-chart"></div></div>
+</div>
+<script>
+(() => {
+  const mini = async (id, sym, mkt) => {
+    const pts = await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=1mo`).then(r => r.json()).catch(() => []);
+    if (!pts.length) return;
+    const chart = mkChart(document.getElementById(id), {
+      height: 120,
+      rightPriceScale: { visible: false },
+      timeScale: { visible: false },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
+    });
+    const up = pts[pts.length - 1][1] >= pts[0][1];
+    const col = up ? '#16a34a' : '#dc2626';
+    chart.addAreaSeries({ lineColor: col, lineWidth: 1.5, topColor: col + '44', bottomColor: col + '00', priceLineVisible: false, lastValueVisible: false })
+      .setData(pts.map(p => ({ time: p[0], value: p[1] })));
+    chart.timeScale().fitContent();
+  };
+  mini('spy-chart', 'SPY', 'US');
+  mini('ta-chart', 'TA35', 'IL');
 })();
 </script>
 <?php endif; ?>

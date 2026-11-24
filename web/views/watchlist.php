@@ -4,7 +4,7 @@
 <?php if (!$items): ?>
   <p class="muted">הרשימה ריקה.</p>
 <?php else: ?>
-<div class="scroll"><table>
+<div class="scroll"><table class="sortable">
   <thead><tr><th>סימול</th><th>שוק</th><th>מחיר</th><th>שינוי יומי</th><th>5 ימים</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($items as $i): $q = $quotes[Prices::key($i['symbol'], $i['market'])] ?? null; $c = $i['market'] === 'IL' ? 'ILS' : 'USD'; ?>

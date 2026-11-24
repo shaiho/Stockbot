@@ -10,7 +10,9 @@
 <link rel="icon" href="icon-192.png">
 <script>const th = localStorage.getItem('theme'); if (th) document.documentElement.dataset.theme = th;</script>
 <script src="vendor/lightweight-charts.js"></script>
+<script src="vendor/chart.umd.js"></script>
 <script src="charts.js"></script>
+<script src="sort.js"></script>
 </head>
 <body>
 <?php if (!empty($_SESSION['auth'])): ?>

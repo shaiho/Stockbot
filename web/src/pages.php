@@ -130,7 +130,8 @@ function handle_page(string $page): never
         $market = in_array($_GET['market'] ?? '', ['US', 'IL'], true) ? $_GET['market'] : 'US';
         $range = in_array($_GET['range'] ?? '', ['1d', '5d', '1mo'], true) ? $_GET['range'] : '1mo';
         header('Content-Type: application/json');
-        echo json_encode(preg_match('/^[A-Z0-9.\-^=]{1,20}$/', $symbol) ? prices()->chart($symbol, $market, $range) : []);
+        $ok = preg_match('/^[A-Z0-9.\-^=]{1,20}$/', $symbol);
+        echo json_encode($ok ? (($_GET['ohlc'] ?? '') === '1' ? prices()->chartOhlc($symbol, $market, $range) : prices()->chart($symbol, $market, $range)) : []);
         exit;
     }
 

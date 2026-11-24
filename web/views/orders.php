@@ -12,7 +12,7 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
 <?php if ($open): ?>
 <form method="post" action="?a=order_cancel_bulk" id="bulk-form">
 <?= csrf_field() ?>
-<div class="scroll"><table>
+<div class="scroll"><table class="sortable">
   <thead><tr><th><input type="checkbox" id="sel-all"></th><th>#</th><th>תיק</th><th>פעולה</th><th>סימול</th><th>כמות</th><th>מחיר יעד</th><th>מחיר חי</th><th>תוקף</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($open as $o): ?>
@@ -51,7 +51,7 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
 <?php if ($closed): ?>
 <details>
   <summary><h2 style="display:inline">היסטוריה <small class="muted">(<?= count($closed) ?>)</small></h2></summary>
-<div class="scroll"><table>
+<div class="scroll"><table class="sortable">
   <thead><tr><th>#</th><th>תיק</th><th>פעולה</th><th>סימול</th><th>כמות</th><th>מחיר יעד</th><th>תוקף</th><th>סטטוס</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($closed as $o): ?>

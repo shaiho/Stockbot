@@ -22,7 +22,7 @@ $pid = $p['id'];
   <?php if (!$sum['holdings']): ?>
     <p class="muted">אין החזקות פתוחות.</p>
   <?php else: ?>
-  <div class="scroll"><table>
+  <div class="scroll"><table class="sortable">
     <thead><tr>
       <th data-sort="symbol" data-type="t">סימול</th><th data-sort="quantity">כמות</th><th data-sort="avg_cost">עלות ממוצעת</th><th data-sort="price">מחיר</th>
       <th data-sort="change_pct">יומי %</th><th data-sort="daily">שינוי יומי</th><th data-sort="value" class="sortable">שווי</th><th data-sort="weight">משקל %</th>
@@ -61,30 +61,35 @@ $pid = $p['id'];
     $totAlloc = array_sum(array_map(fn($r) => $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']), $alloc));
     if ($totAlloc > 0):
       $colors = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
-      $angle = -90.0; $i = 0; $seg = '';
-      foreach ($alloc as $r) {
+      $donut = ['labels' => [], 'values' => []];
+      foreach ($alloc as $i => $r) {
         $v = $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']);
-        $pct = $v / $totAlloc;
-        $a0 = deg2rad($angle); $angle += $pct * 360; $a1 = deg2rad($angle);
-        $large = $pct > 0.5 ? 1 : 0;
-        $x0 = 110 + 80 * cos($a0); $y0 = 110 + 80 * sin($a0);
-        $x1 = 110 + 80 * cos($a1); $y1 = 110 + 80 * sin($a1);
-        $xi1 = 110 + 45 * cos($a1); $yi1 = 110 + 45 * sin($a1);
-        $xi0 = 110 + 45 * cos($a0); $yi0 = 110 + 45 * sin($a0);
-        $seg .= sprintf('<path d="M%.1f %.1f A80 80 0 %d 1 %.1f %.1f L%.1f %.1f A45 45 0 %d 0 %.1f %.1f Z" fill="%s"/>', $x0, $y0, $large, $x1, $y1, $xi1, $yi1, $large, $xi0, $yi0, $colors[$i % count($colors)]);
-        $i++;
+        $donut['labels'][] = $r['symbol'];
+        $donut['values'][] = round($v / $totAlloc * 100, 2);
       }
-      $i = 0;
   ?>
     <h3>הקצאה</h3>
     <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap">
-      <svg viewBox="0 0 220 220" style="width:180px;height:180px"><?= $seg ?></svg>
+      <div class="donut"><canvas id="alloc-chart"></canvas></div>
       <div>
-        <?php foreach ($alloc as $r): $pct = $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']) / $totAlloc * 100; ?>
-          <div><span style="display:inline-block;width:.7rem;height:.7rem;background:<?= $colors[$i++ % count($colors)] ?>;border-radius:2px;margin-left:.4rem"></span><?= h($r['symbol']) ?> — <?= number_format($pct, 1) ?>%</div>
+        <?php foreach ($alloc as $i => $r): $pct = $r['value'] * ($r['currency'] === 'ILS' ? 1 : $sum['fx']) / $totAlloc * 100; ?>
+          <div><span style="display:inline-block;width:.7rem;height:.7rem;background:<?= $colors[$i % count($colors)] ?>;border-radius:2px;margin-left:.4rem"></span><?= h($r['symbol']) ?> — <?= number_format($pct, 1) ?>%</div>
         <?php endforeach; ?>
       </div>
     </div>
+    <script>
+    (() => {
+      const d = <?= json_encode($donut) ?>, colors = <?= json_encode($colors) ?>;
+      const c = new Chart(document.getElementById('alloc-chart'), {
+        type: 'doughnut',
+        data: { labels: d.labels, datasets: [{ data: d.values, backgroundColor: colors, borderWidth: 1 }] },
+        options: {
+          maintainAspectRatio: false, cutout: '62%',
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.label + ' — ' + c.parsed + '%' } } },
+        },
+      });
+    })();
+    </script>
   <?php endif; ?>
   <?php if (count($snapshots) >= 2):
     $pts = array_map(fn($s) => ['time' => $s['date'], 'value' => (float) $s['total_ils']], $snapshots);
@@ -94,7 +99,7 @@ $pid = $p['id'];
     <script>
     (() => {
       const data = <?= json_encode($pts) ?>;
-      mkAreaChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'));
+      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'));
     })();
     </script>
   <?php endif; ?>
@@ -176,7 +181,7 @@ $pid = $p['id'];
     <button type="button" class="link" id="f-clear">נקה</button>
     <span id="f-sum"></span>
   </div>
-  <div class="scroll"><table>
+  <div class="scroll"><table class="sortable">
     <thead><tr><th>#</th><th>תאריך</th><th>פעולה</th><th>סימול</th><th>כמות</th><th>מחיר</th><th>עמלה</th><th>הערה</th><th></th></tr></thead>
     <tbody id="trades-body">
     <?php foreach ($trades as $t): $cash = $t['asset_type'] === 'cash'; $c = $t['currency']; ?>

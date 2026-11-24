@@ -44,6 +44,67 @@ window.lwcRetheme = () => {
   });
 };
 
+// Value chart with ₪/% mode toggle + hover legend.
+window.mkValueChart = (el, data, legend) => {
+  const chart = window.mkChart(el);
+  const ilsFmt = v => '₪' + v.toLocaleString('he-IL', { maximumFractionDigits: 0 });
+  const pctFmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const area = chart.addAreaSeries({
+    lineColor: '#2563eb', lineWidth: 2,
+    topColor: 'rgba(37,99,235,.28)', bottomColor: 'rgba(37,99,235,0)',
+    priceFormat: { type: 'custom', formatter: ilsFmt, minMove: 0.01 },
+  });
+  const d0 = data.length ? data[0].value : 1;
+  const base = chart.addBaselineSeries({
+    baseValue: { type: 'price', price: 0 },
+    topLineColor: '#16a34a', topFillColor1: 'rgba(22,163,74,.3)', topFillColor2: 'rgba(22,163,74,.05)',
+    bottomLineColor: '#dc2626', bottomFillColor1: 'rgba(220,38,38,.05)', bottomFillColor2: 'rgba(220,38,38,.3)',
+    lineWidth: 2, visible: false,
+    priceFormat: { type: 'custom', formatter: pctFmt, minMove: 0.01 },
+  });
+  area.setData(data);
+  base.setData(data.map(d => ({ time: d.time, value: d0 ? (d.value / d0 - 1) * 100 : 0 })));
+  chart.timeScale().fitContent();
+
+  const wrap = el.parentElement;
+  const btns = document.createElement('span');
+  btns.style.cssText = 'float:left;direction:ltr';
+  const bI = document.createElement('button'), bP = document.createElement('button');
+  bI.className = bP.className = 'link';
+  bI.textContent = '₪'; bP.textContent = '%';
+  let mode = 'ils';
+  const fmt = () => mode === 'ils' ? ilsFmt : pctFmt;
+  const setMode = m => {
+    mode = m;
+    area.applyOptions({ visible: m === 'ils' });
+    base.applyOptions({ visible: m === 'pct' });
+    bI.style.fontWeight = m === 'ils' ? '700' : '400';
+    bP.style.fontWeight = m === 'pct' ? '700' : '400';
+    showLast();
+  };
+  bI.onclick = () => setMode('ils');
+  bP.onclick = () => setMode('pct');
+  btns.append(bI, bP);
+  legend && legend.parentElement && legend.parentElement.appendChild(btns);
+
+  const showLast = () => {
+    if (!legend || !data.length) return;
+    const l = data[data.length - 1];
+    legend.textContent = `${l.time} · ${mode === 'ils' ? ilsFmt(l.value) : pctFmt(d0 ? (l.value / d0 - 1) * 100 : 0)}`;
+  };
+  showLast();
+  chart.subscribeCrosshairMove(p => {
+    if (!legend) return;
+    const s = mode === 'ils' ? area : base;
+    const v = p.seriesData && p.seriesData.get(s);
+    if (v === undefined || p.time === undefined) { showLast(); return; }
+    const val = v.value !== undefined ? v.value : v;
+    const t = typeof p.time === 'string' ? p.time : new Date(p.time * 1000).toLocaleDateString('he-IL');
+    legend.textContent = `${t} · ${fmt()(val)}`;
+  });
+  return { chart, area, base };
+};
+
 // Area series for a value-over-time chart with a hover legend.
 window.mkAreaChart = (el, data, legend, priceFmt) => {
   const chart = window.mkChart(el);

@@ -23,7 +23,7 @@
 <p class="muted">חישוב: ממומש ממכירות + דיבידנדים בשנה (עלות ממוצעת לפי עסקאות השנה בלבד), פחות עמלות. הערכה בלבד — אינה ייעוץ מס.</p>
 
 <?php if ($r['by_symbol']): ?>
-<div class="scroll"><table>
+<div class="scroll"><table class="sortable">
   <thead><tr><th>נייר</th><th>ממומש ₪</th></tr></thead>
   <tbody>
   <?php foreach ($r['by_symbol'] as $sym => $v): ?>

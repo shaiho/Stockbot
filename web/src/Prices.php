@@ -99,6 +99,36 @@ final class Prices
         return $out;
     }
 
+    /** OHLCV bars: [[ts, open, high, low, close, volume], ...]. */
+    public function chartOhlc(string $symbol, string $market, string $range): array
+    {
+        if ($market === 'IL' && !str_ends_with($symbol, '.TA')) {
+            $symbol .= '.TA';
+        }
+        $interval = ['1d' => '5m', '5d' => '30m', '1mo' => '1d'][$range] ?? '1d';
+        $url = 'https://query1.finance.yahoo.com/v8/finance/chart/' . rawurlencode($symbol)
+            . '?range=' . $range . '&interval=' . $interval . '&includePrePost=' . ($range === '1d' && $market === 'US' ? 'true' : 'false');
+        $body = $this->multiGet(['x' => $url])['x'] ?? null;
+        $j = $body ? json_decode($body, true) : null;
+        $res = $j['chart']['result'][0] ?? null;
+        if (!$res) {
+            return [];
+        }
+        $ts = $res['timestamp'] ?? [];
+        $q = $res['indicators']['quote'][0] ?? [];
+        $out = [];
+        foreach ($ts as $i => $t) {
+            $o = $q['open'][$i] ?? null;
+            $h = $q['high'][$i] ?? null;
+            $l = $q['low'][$i] ?? null;
+            $c = $q['close'][$i] ?? null;
+            if ($o !== null && $h !== null && $l !== null && $c !== null && $c > 0) {
+                $out[] = [(int) $t, (float) $o, (float) $h, (float) $l, (float) $c, (int) ($q['volume'][$i] ?? 0)];
+            }
+        }
+        return $out;
+    }
+
     private const EVENTS_TTL = 21600; // 6h
 
     /** Dividends and splits from Yahoo chart events: past year + announced (up to ~3mo ahead). Cached 6h. */

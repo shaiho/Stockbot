@@ -37,7 +37,7 @@ function alert_detail(array $r, array $names): string
 <?php if (!$rules): ?>
   <p class="muted">אין התראות.</p>
 <?php else: ?>
-<div class="scroll"><table>
+<div class="scroll"><table class="sortable">
   <thead><tr><th>סוג</th><th>היקף</th><th>פרטים</th><th>מחיר חי</th><th>סטטוס</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($rules as $r): ?>
