@@ -11,6 +11,7 @@ window.lwcTheme = () => (window.lwcIsDark()
 
 // Create a chart that tracks theme and cleans up after content swaps.
 window.mkChart = (el, opts = {}) => {
+  if (el.__lwChart) { return el.__lwChart; }
   const t = window.lwcTheme();
   const chart = LightweightCharts.createChart(el, Object.assign({
     autoSize: true,
@@ -26,6 +27,7 @@ window.mkChart = (el, opts = {}) => {
     localization: { locale: 'he-IL' },
   }, opts));
   window.__lw.push({ c: chart, el });
+  el.__lwChart = chart;
   return chart;
 };
 
@@ -44,8 +46,17 @@ window.lwcRetheme = () => {
   });
 };
 
+// Register a re-apply callback per element (survives content swaps via data-keep).
+window.__lwApply = window.__lwApply || {};
+window.lwRegister = (el, fn) => { window.__lwApply[el.id] = { el, fn }; };
+window.lwReapply = () => {
+  Object.values(window.__lwApply).forEach(({ el, fn }) => { if (el.isConnected) try { fn(); } catch (e) {} });
+};
+
 // Value chart: ₪ raw / ₪ adjusted (ex deposits) / % modes + range selector.
 window.mkValueChart = (el, data, legend, flows = {}, store = '', intradayUrl = '') => {
+  if (el.__lwReady) { return { chart: el.__lwChart }; }
+  el.__lwReady = true;
   const chart = window.mkChart(el);
   const ilsFmt = v => '₪' + v.toLocaleString('he-IL', { maximumFractionDigits: 0 });
   const pctFmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
@@ -145,6 +156,7 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '', intradayUrl = '
     legend.textContent = `${tOf(p.time)} · ${fmt()(val)}`;
   });
   apply();
+  window.lwRegister(el, apply);
   return { chart, area, base };
 };
 

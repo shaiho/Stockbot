@@ -30,7 +30,13 @@
       const oldMain = document.querySelector('main');
       if (!newMain || !oldMain) throw 0;
       clear();
+      const keep = [...oldMain.querySelectorAll('[data-keep]')].map(k => [k.id, k]);
       oldMain.innerHTML = newMain.innerHTML;
+      keep.forEach(([id, k]) => {
+        const slot = document.getElementById(id);
+        if (slot) slot.replaceWith(k);
+      });
+      window.lwReapply && window.lwReapply();
       oldMain.classList.remove('refreshing');
       count.textContent = '';
       oldMain.querySelectorAll('script').forEach(s => {

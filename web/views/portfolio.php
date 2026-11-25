@@ -94,12 +94,17 @@ $pid = $p['id'];
   <?php if (count($snapshots) >= 2):
     $pts = array_map(fn($s) => ['time' => $s['date'], 'value' => (float) $s['total_ils']], $snapshots);
   ?>
-    <h3>שווי לאורך זמן <small id="pchart-legend" class="muted"></small></h3>
-    <div id="pchart" class="lchart"></div>
+    <div id="pchart-sec" data-keep>
+      <h3>שווי לאורך זמן <small id="pchart-legend" class="muted"></small></h3>
+      <div id="pchart" class="lchart"></div>
+    </div>
     <script>
     (() => {
+      const el = document.getElementById('pchart');
+      if (el.__chartDone) return;
+      el.__chartDone = true;
       const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
-      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'), flows, 'pf<?= $pid ?>', '?p=intraday&id=<?= $pid ?>');
+      mkValueChart(el, data, document.getElementById('pchart-legend'), flows, 'pf<?= $pid ?>', '?p=intraday&id=<?= $pid ?>');
     })();
     </script>
   <?php endif; ?>

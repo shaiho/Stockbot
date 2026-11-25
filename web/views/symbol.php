@@ -78,7 +78,7 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
       <button type="button" id="ct-l">קו</button>
     </span>
   </div>
-  <div id="price-chart" class="lchart"></div>
+  <div id="price-chart" class="lchart" data-keep></div>
 </section>
 
 <script>
@@ -98,52 +98,57 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
   const fmtT = ts => new Date(ts * 1000).toLocaleString('he-IL', intra()
     ? { timeZone: tz, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
     : { timeZone: tz, day: 'numeric', month: 'numeric', year: '2-digit' });
-  const chart = mkChart(box, {
-    localization: { locale: 'he-IL', timeFormatter: fmtT },
-    timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: fmtT, borderColor: '#e5e7eb', rightOffset: 2 },
-  });
-  const pfO = { type: 'custom', formatter: pf, minMove: 0.01 };
-  const extOpt = { lineColor: '#94a3b8', lineWidth: 1, topColor: 'rgba(148,163,184,.2)', bottomColor: 'rgba(148,163,184,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
-  const extPre = chart.addAreaSeries(extOpt), extPost = chart.addAreaSeries(extOpt);
-  const candles = chart.addCandlestickSeries({
-    upColor: '#16a34a', downColor: '#dc2626', borderVisible: false,
-    wickUpColor: '#16a34a', wickDownColor: '#dc2626', priceFormat: pfO,
-  });
-  const area = chart.addAreaSeries({
-    lineWidth: 2, lineColor: '#2563eb', topColor: 'rgba(37,99,235,.22)', bottomColor: 'rgba(37,99,235,0)',
-    visible: false, priceFormat: pfO,
-  });
-  const vol = chart.addHistogramSeries({ priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
-  chart.priceScale('').applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
-  candles.priceScale().applyOptions({ scaleMargins: { top: 0.04, bottom: 0.17 } });
-  const main = () => kind === 'candles' ? candles : area;
-  const legend = document.getElementById('schart-legend');
-  let groups = {};
-  box.style.position = 'relative';
-  const tip = document.createElement('div');
-  tip.style.cssText = 'position:absolute;display:none;z-index:5;background:var(--card,#fff);border:1px solid var(--line,#ccc);border-radius:6px;padding:.4rem .6rem;font-size:.85em;pointer-events:none;direction:rtl;text-align:right;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap';
-  box.appendChild(tip);
-  chart.subscribeCrosshairMove(p => {
-    const grp = p.time !== undefined ? groups[p.time] : null;
-    if (grp) {
-      tip.innerHTML = grp.map(tr =>
-        `${tr.action === 'buy' ? '🟢 קניה' : '🔴 מכירה'} <b>${tr.qty}</b> יח׳ @ <b>${pf(tr.price)}</b><br><small class="muted">${tr.date}</small>`
-      ).join('<br>');
-      tip.style.display = 'block';
-      tip.style.left = Math.min(p.point.x + 14, box.clientWidth - tip.offsetWidth - 8) + 'px';
-      tip.style.top = Math.max(p.point.y + 8, 0) + 'px';
-    } else {
-      tip.style.display = 'none';
-    }
-    if (!legend) return;
-    const v = p.seriesData && p.seriesData.get(main());
-    if (v === undefined || p.time === undefined) { legend.textContent = ''; return; }
-    legend.textContent = v.open !== undefined
-      ? `${fmtT(p.time)} · פ ${pf(v.open)} · ג ${pf(v.high)} · נ ${pf(v.low)} · ס ${pf(v.close)}`
-      : fmtT(p.time) + ' · ' + pf(v.value !== undefined ? v.value : v);
-  });
-  let avgLines = [];
-  const draw = async r => {
+
+  let S = box.__S;
+  if (!S) {
+    const chart = mkChart(box, {
+      localization: { locale: 'he-IL', timeFormatter: fmtT },
+      timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: fmtT, borderColor: '#e5e7eb', rightOffset: 2 },
+    });
+    const pfO = { type: 'custom', formatter: pf, minMove: 0.01 };
+    const extOpt = { lineColor: '#94a3b8', lineWidth: 1, topColor: 'rgba(148,163,184,.2)', bottomColor: 'rgba(148,163,184,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+    const extPre = chart.addAreaSeries(extOpt), extPost = chart.addAreaSeries(extOpt);
+    const candles = chart.addCandlestickSeries({
+      upColor: '#16a34a', downColor: '#dc2626', borderVisible: false,
+      wickUpColor: '#16a34a', wickDownColor: '#dc2626', priceFormat: pfO,
+    });
+    const area = chart.addAreaSeries({
+      lineWidth: 2, lineColor: '#2563eb', topColor: 'rgba(37,99,235,.22)', bottomColor: 'rgba(37,99,235,0)',
+      visible: false, priceFormat: pfO,
+    });
+    const vol = chart.addHistogramSeries({ priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+    chart.priceScale('').applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
+    candles.priceScale().applyOptions({ scaleMargins: { top: 0.04, bottom: 0.17 } });
+    box.style.position = 'relative';
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:absolute;display:none;z-index:5;background:var(--card,#fff);border:1px solid var(--line,#ccc);border-radius:6px;padding:.4rem .6rem;font-size:.85em;pointer-events:none;direction:rtl;text-align:right;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap';
+    box.appendChild(tip);
+    S = box.__S = { chart, candles, area, vol, extPre, extPost, tip, groups: {}, avgLines: [] };
+    chart.subscribeCrosshairMove(p => {
+      const grp = p.time !== undefined ? S.groups[p.time] : null;
+      if (grp) {
+        tip.innerHTML = grp.map(tr =>
+          `${tr.action === 'buy' ? '🟢 קניה' : '🔴 מכירה'} <b>${tr.qty}</b> יח׳ @ <b>${pf(tr.price)}</b><br><small class="muted">${tr.date}</small>`
+        ).join('<br>');
+        tip.style.display = 'block';
+        tip.style.left = Math.min(p.point.x + 14, box.clientWidth - tip.offsetWidth - 8) + 'px';
+        tip.style.top = Math.max(p.point.y + 8, 0) + 'px';
+      } else {
+        tip.style.display = 'none';
+      }
+      const legend = document.getElementById('schart-legend');
+      if (!legend) return;
+      const v = p.seriesData && p.seriesData.get(kind === 'candles' ? candles : area);
+      if (v === undefined || p.time === undefined) { legend.textContent = ''; return; }
+      legend.textContent = v.open !== undefined
+        ? `${fmtT(p.time)} · פ ${pf(v.open)} · ג ${pf(v.high)} · נ ${pf(v.low)} · ס ${pf(v.close)}`
+        : fmtT(p.time) + ' · ' + pf(v.value !== undefined ? v.value : v);
+    });
+    window.lwRegister && lwRegister(box, () => box.__S.draw && box.__S.draw(range));
+  }
+  const { chart, candles, area, vol, extPre, extPost } = S;
+
+  const draw = S.draw = async r => {
     range = r;
     box.style.opacity = '.4';
     let bars = [];
@@ -171,14 +176,14 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     // trade markers snapped to nearest bar
     const tset = data.map(d => d.time);
     const nearest = t => tset.reduce((best, x) => Math.abs(x - t) < Math.abs(best - t) ? x : best, tset[0]);
-    groups = {};
+    S.groups = {};
     trades.forEach(tr => {
       if (!tset.length || tr.ts < tset[0] - 172800 || tr.ts > tset[tset.length - 1] + 172800) return;
       const k = nearest(tr.ts);
-      (groups[k] = groups[k] || []).push(tr);
+      (S.groups[k] = S.groups[k] || []).push(tr);
     });
     const markers = [];
-    Object.entries(groups).forEach(([t, arr]) => {
+    Object.entries(S.groups).forEach(([t, arr]) => {
       const buys = arr.filter(x => x.action === 'buy'), sells = arr.filter(x => x.action !== 'buy');
       if (buys.length) markers.push({ time: +t, position: 'belowBar', color: '#16a34a', shape: 'arrowUp', text: 'קניה ' + buys.length });
       if (sells.length) markers.push({ time: +t, position: 'aboveBar', color: '#dc2626', shape: 'arrowDown', text: 'מכירה ' + sells.length });
@@ -186,11 +191,11 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     markers.sort((a, b) => a.time - b.time);
     candles.setMarkers(markers);
     area.setMarkers(markers);
-    avgLines.forEach(([s, l]) => s.removePriceLine(l));
-    avgLines = [];
+    S.avgLines.forEach(([s, l]) => s.removePriceLine(l));
+    S.avgLines = [];
     const ys = data.map(d => d.close);
     if (ys.length && avgCost > Math.min(...ys) && avgCost < Math.max(...ys)) {
-      [candles, area].forEach(s => avgLines.push([s, s.createPriceLine({ price: avgCost, color: '#7c3aed', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'עלות ממוצעת' })]));
+      [candles, area].forEach(s => S.avgLines.push([s, s.createPriceLine({ price: avgCost, color: '#7c3aed', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: 'עלות ממוצעת' })]));
     }
     chart.timeScale().fitContent();
   };

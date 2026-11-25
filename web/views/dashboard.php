@@ -29,37 +29,47 @@
 <?php if (count($snapshots) >= 2):
     $pts = array_map(fn($s) => ['time' => $s['date'], 'value' => (float) $s['total_ils']], $snapshots);
 ?>
-<section>
+<section id="vchart-sec" data-keep>
   <h2>שווי כולל לאורך זמן <small id="vchart-legend" class="muted"></small></h2>
   <div id="vchart" class="lchart"></div>
 </section>
 <script>
 (() => {
+  const el = document.getElementById('vchart');
+  if (el.__chartDone) return;
+  el.__chartDone = true;
   const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
-  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'), flows, 'dash', '?p=intraday&id=0');
+  mkValueChart(el, data, document.getElementById('vchart-legend'), flows, 'dash', '?p=intraday&id=0');
 })();
 </script>
-<div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+<div style="display:flex;gap:1.5rem;flex-wrap:wrap" id="bench-charts" data-keep>
   <div style="flex:1;min-width:280px"><h3 class="muted">SPY · חודש</h3><div id="spy-chart" class="mini-chart"></div></div>
   <div style="flex:1;min-width:280px"><h3 class="muted">TA-35 · חודש</h3><div id="ta-chart" class="mini-chart"></div></div>
 </div>
 <script>
 (() => {
   const mini = async (id, sym, mkt) => {
+    const el = document.getElementById(id);
     const pts = await fetch(`?p=chart&symbol=${sym}&market=${mkt}&range=1mo`).then(r => r.json()).catch(() => []);
     if (!pts.length) return;
-    const chart = mkChart(document.getElementById(id), {
+    const up = pts[pts.length - 1][1] >= pts[0][1];
+    const col = up ? '#16a34a' : '#dc2626';
+    if (el.__chartDone) {
+      el.__lwSeries.setData(pts.map(p => ({ time: p[0], value: p[1] })));
+      return;
+    }
+    el.__chartDone = true;
+    const chart = mkChart(el, {
       height: 120,
       rightPriceScale: { visible: false },
       timeScale: { visible: false },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
     });
-    const up = pts[pts.length - 1][1] >= pts[0][1];
-    const col = up ? '#16a34a' : '#dc2626';
-    chart.addAreaSeries({ lineColor: col, lineWidth: 1.5, topColor: col + '44', bottomColor: col + '00', priceLineVisible: false, lastValueVisible: false })
-      .setData(pts.map(p => ({ time: p[0], value: p[1] })));
+    el.__lwSeries = chart.addAreaSeries({ lineColor: col, lineWidth: 1.5, topColor: col + '44', bottomColor: col + '00', priceLineVisible: false, lastValueVisible: false });
+    el.__lwSeries.setData(pts.map(p => ({ time: p[0], value: p[1] })));
     chart.timeScale().fitContent();
+    window.lwRegister && lwRegister(el, () => mini(id, sym, mkt));
   };
   mini('spy-chart', 'SPY', 'US');
   mini('ta-chart', 'TA35', 'IL');
