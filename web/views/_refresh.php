@@ -6,7 +6,7 @@
   <span id="refresh-count"></span>
   <form method="post" action="?a=fx_set" class="inline" style="display:inline-flex;gap:.3rem;align-items:center">
     <?= csrf_field() ?><input type="hidden" name="back" value="<?= h($_SERVER['REQUEST_URI'] ?? '?p=dashboard') ?>">
-    שער: <input name="fx" type="number" step="any" inputmode="decimal" size="6" placeholder="auto" value="<?= h((string) ($_SESSION['fx_manual'] ?? '')) ?>">
+    שער: <input name="fx" type="number" step="0.01" inputmode="decimal" size="6" placeholder="auto" value="<?= h((string) ($_SESSION['fx_manual'] ?? '')) ?>">
     <button class="link"><?= !empty($_SESSION['fx_manual']) ? 'בטל ידני' : 'הגדר' ?></button>
   </form>
 </div>

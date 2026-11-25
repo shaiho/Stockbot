@@ -257,8 +257,8 @@ $pastSplit = array_values(array_filter($events['splits'], fn($e) => $e['date'] <
       <select name="portfolio_id"><?php foreach ($portfolios as $pp): ?><option value="<?= $pp['id'] ?>"><?= h($pp['name']) ?></option><?php endforeach; ?></select>
     </label>
     <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
-    <label>כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
-    <label><span id="sq-price-label">מחיר ליחידה</span> <input name="price" type="number" step="any" inputmode="decimal" value="<?= h((string) ($quote['price'] ?? '')) ?>" required></label>
+    <label>כמות <input name="quantity" type="number" step="0.01" inputmode="decimal" required></label>
+    <label><span id="sq-price-label">מחיר ליחידה</span> <input name="price" type="number" step="0.01" inputmode="decimal" value="<?= h((string) ($quote['price'] ?? '')) ?>" required></label>
     <label id="sq-expires" hidden>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>"></label>
     <button class="primary">שמור</button> <button type="button" id="sq-cancel">ביטול</button>
   </form>

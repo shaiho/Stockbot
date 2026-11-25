@@ -97,8 +97,8 @@
   <h2>תיק חדש</h2>
   <?= csrf_field() ?>
   <label>שם <input name="name" maxlength="50" required></label>
-  <label>מזומן פתיחה ₪ <input name="cash_ils" type="number" step="any" inputmode="decimal" value="0"></label>
-  <label>מזומן פתיחה $ <input name="cash_usd" type="number" step="any" inputmode="decimal" value="0"></label>
+  <label>מזומן פתיחה ₪ <input name="cash_ils" type="number" step="0.01" inputmode="decimal" value="0"></label>
+  <label>מזומן פתיחה $ <input name="cash_usd" type="number" step="0.01" inputmode="decimal" value="0"></label>
   <button class="primary">צור תיק</button>
 </form>
 <?php endif; ?>
