@@ -124,9 +124,9 @@ $pid = $p['id'];
     <label>שוק
       <select name="market"><option value="">אוטומטי</option><option value="US">US</option><option value="IL">IL</option></select>
     </label>
-    <label id="qty-row">כמות <input name="quantity" inputmode="decimal"></label>
-    <label><span id="price-label">מחיר ליחידה</span> <input name="price" inputmode="decimal" required></label>
-    <label id="comm-row">עמלה (ריק = אוטומטי) <input name="commission" inputmode="decimal"></label>
+    <label id="qty-row">כמות <input name="quantity" type="number" step="any" inputmode="decimal"></label>
+    <label><span id="price-label">מחיר ליחידה</span> <input name="price" type="number" step="any" inputmode="decimal" required></label>
+    <label id="comm-row">עמלה (ריק = אוטומטי) <input name="commission" type="number" step="any" inputmode="decimal"></label>
     <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור עסקה</button>
@@ -137,7 +137,7 @@ $pid = $p['id'];
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
     <label>פעולה <select name="kind"><option value="deposit">הפקדה</option><option value="withdraw">משיכה</option></select></label>
     <label>מטבע <select name="currency"><option value="ILS">₪ ILS</option><option value="USD">$ USD</option></select></label>
-    <label>סכום <input name="amount" inputmode="decimal" required></label>
+    <label>סכום <input name="amount" type="number" step="any" inputmode="decimal" required></label>
     <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור</button>
@@ -146,12 +146,12 @@ $pid = $p['id'];
 
   <div class="card form">
     <h2>מחשבון פוזיציה</h2>
-    <label>סכום <input id="pc-amount" inputmode="decimal"></label>
-    <label>מחיר ליחידה <input id="pc-price" inputmode="decimal"></label>
+    <label>סכום <input id="pc-amount" type="number" step="any" inputmode="decimal"></label>
+    <label>מחיר ליחידה <input id="pc-price" type="number" step="any" inputmode="decimal"></label>
     <label>מטבע <select id="pc-cur"><option value="USD">$ USD</option><option value="ILS">₪ ILS</option></select></label>
     <p class="muted" id="pc-out">יחידות: —</p>
     <hr>
-    <p class="muted small">כמות קיימת <input id="pc-qty" inputmode="decimal" size="6"> עלות ממוצעת <input id="pc-avg" inputmode="decimal" size="8"></p>
+    <p class="muted small">כמות קיימת <input id="pc-qty" type="number" step="any" inputmode="decimal" size="6"> עלות ממוצעת <input id="pc-avg" type="number" step="any" inputmode="decimal" size="8"></p>
     <p class="muted" id="pc-avg-out">עלות חדשה: —</p>
   </div>
 
@@ -161,8 +161,8 @@ $pid = $p['id'];
     <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
     <label>סימול <input name="symbol" required placeholder="AAPL / TEVA.TA"></label>
     <label>שוק <select name="market"><option value="">אוטומטי</option><option value="US">US</option><option value="IL">IL</option></select></label>
-    <label>כמות <input name="quantity" inputmode="decimal" required></label>
-    <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
+    <label>כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" type="number" step="any" inputmode="decimal" required></label>
     <label>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>" required></label>
     <button class="primary">פתח הוראה</button>
   </form>
@@ -241,22 +241,22 @@ $pid = $p['id'];
     <form class="card form" method="post" action="?a=portfolio_cash">
       <h3>מזומן פתיחה</h3>
       <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
-      <label>₪ <input name="cash_ils" inputmode="decimal" value="<?= h($p['opening_cash_ils']) ?>"></label>
-      <label>$ <input name="cash_usd" inputmode="decimal" value="<?= h($p['opening_cash_usd']) ?>"></label>
+      <label>₪ <input name="cash_ils" type="number" step="any" inputmode="decimal" value="<?= h($p['opening_cash_ils']) ?>"></label>
+      <label>$ <input name="cash_usd" type="number" step="any" inputmode="decimal" value="<?= h($p['opening_cash_usd']) ?>"></label>
       <button>עדכן</button>
     </form>
     <form class="card form" method="post" action="?a=portfolio_commission">
       <h3>עמלות</h3>
       <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
-      <label>מינימום $ <input name="min_usd" inputmode="decimal" value="<?= h($p['commission_min_usd']) ?>"></label>
-      <label>מינימום ₪ <input name="min_ils" inputmode="decimal" value="<?= h($p['commission_min_ils']) ?>"></label>
+      <label>מינימום $ <input name="min_usd" type="number" step="any" inputmode="decimal" value="<?= h($p['commission_min_usd']) ?>"></label>
+      <label>מינימום ₪ <input name="min_ils" type="number" step="any" inputmode="decimal" value="<?= h($p['commission_min_ils']) ?>"></label>
       <label>תוספת
         <select name="extra_type">
           <option value="fixed" <?= $p['commission_extra_type'] === 'fixed' ? 'selected' : '' ?>>קבועה</option>
           <option value="percent" <?= $p['commission_extra_type'] === 'percent' ? 'selected' : '' ?>>אחוז מהעסקה</option>
         </select>
       </label>
-      <label>ערך <input name="extra_value" inputmode="decimal" value="<?= h($p['commission_extra_value']) ?>"></label>
+      <label>ערך <input name="extra_value" type="number" step="any" inputmode="decimal" value="<?= h($p['commission_extra_value']) ?>"></label>
       <button>שמור</button>
     </form>
     <div class="card form">
@@ -275,8 +275,8 @@ $pid = $p['id'];
     <h2>המרת מט"ח</h2>
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
     <label>כיוון <select name="direction" id="fx-dir"><option value="ils2usd">₪ שקלים → $ דולרים</option><option value="usd2ils">$ דולרים → ₪ שקלים</option></select></label>
-    <label><span id="fx-amt-label">סכום ₪</span> <input name="amount" id="fx-amount" inputmode="decimal" required></label>
-    <label>שער (₪ לדולר) <input name="rate" id="fx-rate" inputmode="decimal" value="<?= h((string) ($sum['fx'] ?? '')) ?>" required></label>
+    <label><span id="fx-amt-label">סכום ₪</span> <input name="amount" id="fx-amount" type="number" step="any" inputmode="decimal" required></label>
+    <label>שער (₪ לדולר) <input name="rate" id="fx-rate" type="number" step="any" inputmode="decimal" value="<?= h((string) ($sum['fx'] ?? '')) ?>" required></label>
     <p class="muted" id="fx-out">יתקבל: —</p>
     <label>תאריך (ריק = עכשיו) <input type="date" name="date" max="<?= date('Y-m-d') ?>"></label>
     <button class="primary">בצע המרה</button> <button type="button" id="fx-cancel">ביטול</button>
@@ -289,9 +289,9 @@ $pid = $p['id'];
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
     <input type="hidden" name="symbol"><input type="hidden" name="market">
     <label>פעולה <select name="action_type" id="qt-act"><option value="buy">קנייה</option><option value="sell">מכירה</option><option value="dividend">דיבידנד</option></select></label>
-    <label id="qt-qty-row">כמות <input name="quantity" inputmode="decimal" required></label>
-    <label><span id="qt-price-label">מחיר ליחידה</span> <input name="price" id="qt-price" inputmode="decimal" required></label>
-    <label id="qt-comm-row">עמלה (ריק = אוטומטי) <input name="commission" inputmode="decimal"></label>
+    <label id="qt-qty-row">כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
+    <label><span id="qt-price-label">מחיר ליחידה</span> <input name="price" id="qt-price" type="number" step="any" inputmode="decimal" required></label>
+    <label id="qt-comm-row">עמלה (ריק = אוטומטי) <input name="commission" type="number" step="any" inputmode="decimal"></label>
     <label>הערה <input name="note" maxlength="200"></label>
     <button class="primary">שמור עסקה</button> <button type="button" id="qt-cancel">ביטול</button>
   </form>
@@ -303,8 +303,8 @@ $pid = $p['id'];
     <?= csrf_field() ?><input type="hidden" name="portfolio_id" value="<?= $pid ?>">
     <input type="hidden" name="symbol"><input type="hidden" name="market">
     <label>פעולה <select name="action_type"><option value="buy">קנייה</option><option value="sell">מכירה</option></select></label>
-    <label>כמות <input name="quantity" inputmode="decimal" required></label>
-    <label>מחיר יעד ליחידה <input name="price" id="qo-price" inputmode="decimal" required></label>
+    <label>כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" id="qo-price" type="number" step="any" inputmode="decimal" required></label>
     <label>בתוקף עד <input type="date" name="expires" value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>" required></label>
     <button class="primary">פתח הוראה</button> <button type="button" id="qo-cancel">ביטול</button>
   </form>

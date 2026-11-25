@@ -84,8 +84,8 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
     <h2>הוראה חדשה — <span id="od-title"></span></h2>
     <?= csrf_field() ?>
     <input type="hidden" name="portfolio_id"><input type="hidden" name="symbol"><input type="hidden" name="market"><input type="hidden" name="action_type">
-    <label>כמות <input name="quantity" inputmode="decimal" required></label>
-    <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
+    <label>כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" type="number" step="any" inputmode="decimal" required></label>
     <label>בתוקף עד <input type="date" name="expires" min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>" required></label>
     <button class="primary">פתח הוראה</button> <button type="button" id="od-cancel">ביטול</button>
   </form>
@@ -95,8 +95,8 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
   <form class="card form" method="post" action="?a=order_edit">
     <h2>עריכת הוראה #<span id="oe-title"></span></h2>
     <?= csrf_field() ?><input type="hidden" name="order_id">
-    <label>כמות <input name="quantity" inputmode="decimal" required></label>
-    <label>מחיר יעד ליחידה <input name="price" inputmode="decimal" required></label>
+    <label>כמות <input name="quantity" type="number" step="any" inputmode="decimal" required></label>
+    <label>מחיר יעד ליחידה <input name="price" type="number" step="any" inputmode="decimal" required></label>
     <label>בתוקף עד <input type="date" name="expires" min="<?= date('Y-m-d') ?>" required></label>
     <button class="primary">שמור</button> <button type="button" id="oe-cancel">ביטול</button>
   </form>

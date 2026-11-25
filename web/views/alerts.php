@@ -90,12 +90,12 @@ function alert_detail(array $r, array $names): string
   <label data-for="portfolio">תיק
     <select name="portfolio_id"><?php foreach ($portfolios as $p): ?><option value="<?= $p['id'] ?>"><?= h($p['name']) ?></option><?php endforeach; ?></select>
   </label>
-  <label data-types="pct_daily premarket afterhours portfolio_value_change daily_loss_limit">סף (%) <input name="threshold_pct" inputmode="decimal"></label>
+  <label data-types="pct_daily premarket afterhours portfolio_value_change daily_loss_limit">סף (%) <input name="threshold_pct" type="number" step="any" inputmode="decimal"></label>
   <div data-types="price_target">
-    <label>מחיר יעד <input name="target_price" inputmode="decimal"></label>
+    <label>מחיר יעד <input name="target_price" type="number" step="any" inputmode="decimal"></label>
     <label>כיוון <select name="direction"><option value="above">מעל</option><option value="below">מתחת</option></select></label>
   </div>
-  <label data-types="pnl_milestone">יעד ₪ (שלילי = הפסד) <input name="threshold_ils" inputmode="decimal"></label>
+  <label data-types="pnl_milestone">יעד ₪ (שלילי = הפסד) <input name="threshold_ils" type="number" step="any" inputmode="decimal"></label>
   <button class="primary">צור התראה</button>
 </form>
 
