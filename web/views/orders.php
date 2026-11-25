@@ -10,14 +10,12 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
 
 <h2>הוראות פתוחות <small class="muted">(<?= count($open) ?>)</small></h2>
 <?php if ($open): ?>
-<form method="post" action="?a=order_cancel_bulk" id="bulk-form">
-<?= csrf_field() ?>
 <div class="scroll"><table class="sortable">
   <thead><tr><th><input type="checkbox" id="sel-all"></th><th>#</th><th>תיק</th><th>פעולה</th><th>סימול</th><th>כמות</th><th>מחיר יעד</th><th>מחיר חי</th><th>תוקף</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($open as $o): ?>
     <tr>
-      <td><input type="checkbox" name="order_ids[]" value="<?= $o['id'] ?>" class="sel-order"></td>
+      <td><input type="checkbox" name="order_ids[]" value="<?= $o['id'] ?>" class="sel-order" form="bulk-form"></td>
       <td><?= $o['id'] ?></td>
       <td><a href="?p=portfolio&id=<?= $o['portfolio_id'] ?>"><?= h($o['portfolio_name']) ?></a></td>
       <td><?= h($actLabels[$o['action']] ?? $o['action']) ?></td>
@@ -42,6 +40,8 @@ $closed = array_values(array_filter($orders, fn($o) => $o['status'] !== 'open'))
   <?php endforeach; ?>
   </tbody>
 </table></div>
+<form method="post" action="?a=order_cancel_bulk" id="bulk-form">
+<?= csrf_field() ?>
 <button class="danger" id="bulk-cancel" data-confirm disabled data-confirm-text="לבטל את ההוראות שנבחרו?">בטל נבחרות</button>
 </form>
 <?php else: ?>
