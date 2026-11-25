@@ -67,13 +67,16 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
 
 <section>
   <h2>גרף מחיר <small id="schart-legend" class="muted"></small></h2>
-  <div class="filter muted">
-    <button type="button" class="link chart-range" data-range="1d">יום</button>
-    <button type="button" class="link chart-range" data-range="5d">5 ימים</button>
-    <button type="button" class="link chart-range" data-range="1mo">חודש</button>
-    <span class="muted">·</span>
-    <button type="button" class="link" id="ct-c" style="font-weight:700">נרות</button>
-    <button type="button" class="link" id="ct-l">קו</button>
+  <div class="filter muted chart-btns">
+    <span>
+      <button type="button" class="chart-range" data-range="1d">יום</button>
+      <button type="button" class="chart-range" data-range="5d">5 ימים</button>
+      <button type="button" class="chart-range" data-range="1mo">חודש</button>
+    </span>
+    <span>
+      <button type="button" id="ct-c" class="on">נרות</button>
+      <button type="button" id="ct-l">קו</button>
+    </span>
   </div>
   <div id="price-chart" class="lchart"></div>
 </section>
@@ -192,9 +195,9 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     chart.timeScale().fitContent();
   };
   document.querySelectorAll('.chart-range').forEach(b => {
-    b.style.fontWeight = b.dataset.range === range ? '700' : '400';
+    b.classList.toggle('on', b.dataset.range === range);
     b.addEventListener('click', () => {
-      document.querySelectorAll('.chart-range').forEach(x => x.style.fontWeight = x === b ? '700' : '400');
+      document.querySelectorAll('.chart-range').forEach(x => x.classList.toggle('on', x === b));
       draw(b.dataset.range).then(persistSc);
     });
   });
@@ -203,8 +206,8 @@ $avgCost = $avgQty > 1e-9 ? $avgCost / $avgQty : 0.0;
     persistSc();
     candles.applyOptions({ visible: k === 'candles' });
     area.applyOptions({ visible: k === 'line' });
-    document.getElementById('ct-c').style.fontWeight = k === 'candles' ? '700' : '400';
-    document.getElementById('ct-l').style.fontWeight = k === 'line' ? '700' : '400';
+    document.getElementById('ct-c').classList.toggle('on', k === 'candles');
+    document.getElementById('ct-l').classList.toggle('on', k === 'line');
   };
   document.getElementById('ct-c').addEventListener('click', () => setKind('candles'));
   document.getElementById('ct-l').addEventListener('click', () => setKind('line'));

@@ -88,3 +88,7 @@ table.sortable th.sort-asc::after { content: ' ▲'; font-size: .7em; }
 table.sortable th.sort-desc::after { content: ' ▼'; font-size: .7em; }
 .mini-chart { width: 100%; max-width: 440px; height: 120px; direction: ltr; }
 .donut { width: 220px; height: 220px; direction: ltr; }
+.chart-btns { display: inline-flex; gap: .5rem; direction: ltr; vertical-align: middle; }
+.chart-btns > span { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); }
+.chart-btns button { padding: .15rem .6rem; background: transparent; border: 0; color: var(--muted); font-size: .9em; cursor: pointer; }
+.chart-btns button.on { background: var(--accent, #2563eb); color: #fff; font-weight: 700; }

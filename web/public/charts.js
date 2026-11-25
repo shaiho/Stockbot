@@ -113,15 +113,14 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '', intradayUrl = '
   };
 
   const btns = document.createElement('span');
-  btns.style.cssText = 'float:left;direction:ltr;display:inline-flex;gap:.7rem';
+  btns.className = 'chart-btns';
   const mkBtns = (items, cur, set) => {
     const g = document.createElement('span');
     items.forEach(([id, label]) => {
       const b = document.createElement('button');
-      b.className = 'link';
       b.textContent = label;
-      b.style.fontWeight = id === cur() ? '700' : '400';
-      b.onclick = () => { set(id); persist(); g.querySelectorAll('button').forEach(x => x.style.fontWeight = x === b ? '700' : '400'); };
+      b.classList.toggle('on', id === cur());
+      b.onclick = () => { set(id); persist(); g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
       g.appendChild(b);
     });
     return g;
