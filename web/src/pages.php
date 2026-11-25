@@ -135,6 +135,59 @@ function handle_page(string $page): never
         exit;
     }
 
+    // Intraday total value: qty per holding x 5m closes, forward-filled. ?id=0 = all portfolios.
+    if ($page === 'intraday') {
+        $id = (int) ($_GET['id'] ?? 0);
+        $ports = $id ? [owned_portfolio($id)] : $repo->portfolios($uid);
+        $fx = prices()->usdIls();
+        $total = [];
+        foreach ($ports as $p) {
+            $trades = $repo->trades($p['id']);
+            [$cIls, $cUsd] = Calc::cashBalances($p, $trades);
+            $cash = $cIls + $cUsd * $fx;
+            $pos = [];
+            foreach ($trades as $t) {
+                if ($t['asset_type'] !== 'cash' && in_array($t['action'], ['buy', 'sell'], true)) {
+                    $pos[$t['symbol']]['qty'] = ($pos[$t['symbol']]['qty'] ?? 0) + ($t['action'] === 'buy' ? 1 : -1) * $t['quantity'];
+                    $pos[$t['symbol']]['market'] = $t['market'];
+                    $pos[$t['symbol']]['k'] = $t['currency'] === 'ILS' ? 1.0 : $fx;
+                }
+            }
+            $series = [];
+            foreach ($pos as $sym => $i) {
+                if ($i['qty'] < 1e-9) {
+                    continue;
+                }
+                $m = [];
+                foreach (prices()->chart($sym, $i['market'], '1d') as [$ts, $c]) {
+                    $m[$ts] = $c;
+                }
+                if ($m) {
+                    $series[$sym] = ['m' => $m, 'v' => $i['qty'] * $i['k']];
+                }
+            }
+            $times = [];
+            foreach ($series as $s) {
+                $times += $s['m'];
+            }
+            $times = array_keys($times);
+            sort($times);
+            $last = [];
+            foreach ($times as $t) {
+                $v = $cash;
+                foreach ($series as $sym => $s) {
+                    $last[$sym] = $s['m'][$t] ?? $last[$sym] ?? null;
+                    $v += $last[$sym] !== null ? $last[$sym] * $s['v'] : 0;
+                }
+                $total[$t] = ($total[$t] ?? 0) + $v;
+            }
+        }
+        ksort($total);
+        header('Content-Type: application/json');
+        echo json_encode(array_map(fn($t, $v) => [(int) $t, round($v, 2)], array_keys($total), $total));
+        exit;
+    }
+
     switch ($page) {
         case 'portfolio':
             [$ports, $tradesBy] = $repo->portfoliosWithTrades($uid);

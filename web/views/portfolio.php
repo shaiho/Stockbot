@@ -99,7 +99,7 @@ $pid = $p['id'];
     <script>
     (() => {
       const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
-      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'), flows, 'pf<?= $pid ?>');
+      mkValueChart(document.getElementById('pchart'), data, document.getElementById('pchart-legend'), flows, 'pf<?= $pid ?>', '?p=intraday&id=<?= $pid ?>');
     })();
     </script>
   <?php endif; ?>

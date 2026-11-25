@@ -36,7 +36,7 @@
 <script>
 (() => {
   const data = <?= json_encode($pts) ?>, flows = <?= json_encode((object) $flows) ?>;
-  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'), flows, 'dash');
+  mkValueChart(document.getElementById('vchart'), data, document.getElementById('vchart-legend'), flows, 'dash', '?p=intraday&id=0');
 })();
 </script>
 <div style="display:flex;gap:1.5rem;flex-wrap:wrap">

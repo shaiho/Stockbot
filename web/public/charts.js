@@ -45,7 +45,7 @@ window.lwcRetheme = () => {
 };
 
 // Value chart: ₪ raw / ₪ adjusted (ex deposits) / % modes + range selector.
-window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
+window.mkValueChart = (el, data, legend, flows = {}, store = '', intradayUrl = '') => {
   const chart = window.mkChart(el);
   const ilsFmt = v => '₪' + v.toLocaleString('he-IL', { maximumFractionDigits: 0 });
   const pctFmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
@@ -67,7 +67,7 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
   const cumAt = t => { let c = 0; for (const k of fKeys) { if (k <= t) c = flows[k]; else break; } return c; };
   const adj = data.map(d => ({ time: d.time, value: d.value - cumAt(d.time) }));
 
-  const RANGES = [['w', 'שבוע', 7], ['m', 'חודש', 30], ['q', 'רבעון', 92], ['y', 'שנה', 365], ['all', 'הכל', 0]];
+  const RANGES = [['d', 'היום', 0], ['w', 'שבוע', 7], ['m', 'חודש', 30], ['q', 'רבעון', 92], ['y', 'שנה', 365], ['all', 'הכל', 0]];
   const MODES = [['ils', '₪'], ['adj', 'מתואם'], ['pct', '%']];
   const saved = store && JSON.parse(localStorage.getItem('vc_' + store) || 'null');
   let mode = saved && MODES.some(m => m[0] === saved.mode) ? saved.mode : 'adj';
@@ -82,8 +82,22 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
   };
   const fmt = () => mode === 'pct' ? pctFmt : ilsFmt;
 
-  const apply = () => {
+  let cur = [];
+  const apply = async () => {
+    if (range === 'd' && intradayUrl) {
+      const pts = await fetch(intradayUrl).then(r => r.json()).catch(() => []);
+      cur = pts.map(p => ({ time: p[0], value: p[1] }));
+      area.setData(pts.map(p => ({ time: p[0], value: p[1] })));
+      area.applyOptions({ visible: true });
+      base.applyOptions({ visible: false });
+      chart.applyOptions({ timeScale: { timeVisible: true, tickMarkFormatter: t => new Date(t * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) } });
+      chart.timeScale().fitContent();
+      showLast();
+      return;
+    }
+    chart.applyOptions({ timeScale: { timeVisible: false, tickMarkFormatter: t => typeof t === 'string' ? t.slice(8) + '/' + t.slice(5, 7) : new Date(t * 1000).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }) } });
     const vis = filtered();
+    cur = vis;
     if (mode === 'pct') {
       const b0 = vis.length ? vis[0].value : 1;
       base.setData(vis.map(d => ({ time: d.time, value: b0 ? (d.value / b0 - 1) * 100 : 0 })));
@@ -116,12 +130,12 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
   btns.appendChild(mkBtns(RANGES.map(r => [r[0], r[1]]), () => range, r => { range = r; apply(); }));
   legend && legend.parentElement && legend.parentElement.appendChild(btns);
 
+  const tOf = t => typeof t === 'string' ? t : new Date(t * 1000).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
   const showLast = () => {
     if (!legend) return;
-    const vis = filtered();
-    const l = vis[vis.length - 1];
+    const l = cur[cur.length - 1];
     if (!l) { legend.textContent = ''; return; }
-    legend.textContent = `${l.time} · ${fmt()(mode === 'pct' && vis[0].value ? (l.value / vis[0].value - 1) * 100 : l.value)}`;
+    legend.textContent = `${tOf(l.time)} · ${fmt()(mode === 'pct' && cur[0].value ? (l.value / cur[0].value - 1) * 100 : l.value)}`;
   };
   chart.subscribeCrosshairMove(p => {
     if (!legend) return;
@@ -129,8 +143,7 @@ window.mkValueChart = (el, data, legend, flows = {}, store = '') => {
     const v = p.seriesData && p.seriesData.get(s);
     if (v === undefined || p.time === undefined) { showLast(); return; }
     const val = v.value !== undefined ? v.value : v;
-    const t = typeof p.time === 'string' ? p.time : new Date(p.time * 1000).toLocaleDateString('he-IL');
-    legend.textContent = `${t} · ${fmt()(val)}`;
+    legend.textContent = `${tOf(p.time)} · ${fmt()(val)}`;
   });
   apply();
   return { chart, area, base };
