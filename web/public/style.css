@@ -23,6 +23,8 @@ h3 { font-size: 1rem; margin: 0 0 .5rem; }
 
 .top { display: flex; align-items: center; gap: 1.25rem; padding: .6rem 1rem; background: var(--card); border-bottom: 1px solid var(--line); }
 .top nav { display: flex; gap: 1rem; flex: 1; }
+.news-strip { display: flex; flex-wrap: wrap; gap: .35rem .9rem; padding: .3rem 1rem; font-size: .82rem; background: color-mix(in srgb, var(--accent, #2563eb) 7%, var(--card)); border-bottom: 1px solid var(--line); }
+.news-strip i { color: var(--line); font-style: normal; }
 .brand { font-weight: 700; color: var(--text); }
 .head { display: flex; justify-content: space-between; align-items: baseline; }
 

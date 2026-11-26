@@ -159,6 +159,61 @@ function repo(): Repo
     return $r ??= new Repo(Db::pdo());
 }
 
+/** Market-closure / short-session notes for the header strip (US + IL). */
+function market_notes(?array $usq, ?array $ilq): array
+{
+    $ilTz = new DateTimeZone('Asia/Jerusalem');
+    $usTz = new DateTimeZone('America/New_York');
+    $ilNow = new DateTimeImmutable('now', $ilTz);
+    $usNow = new DateTimeImmutable('now', $usTz);
+
+    // NYSE full-day closures (observed dates).
+    static $usHolidays = [
+        '2025-01-01' => 'ראש השנה', '2025-01-20' => 'יום מרטין לותר קינג',
+        '2025-02-17' => 'יום הנשיאים', '2025-04-18' => 'יום השישי הטוב',
+        '2025-05-26' => 'יום הזיכרון', '2025-06-19' => 'יום האמנציפציה',
+        '2025-07-04' => 'יום העצמאות', '2025-09-01' => 'יום העבודה',
+        '2025-11-27' => 'חג ההודיה', '2025-12-25' => 'חג המולד',
+        '2026-01-01' => 'ראש השנה', '2026-01-19' => 'יום מרטין לותר קינג',
+        '2026-02-16' => 'יום הנשיאים', '2026-04-03' => 'יום השישי הטוב',
+        '2026-05-25' => 'יום הזיכרון', '2026-06-19' => 'יום האמנציפציה',
+        '2026-07-03' => 'יום העצמאות', '2026-09-07' => 'יום העבודה',
+        '2026-11-26' => 'חג ההודיה', '2026-12-25' => 'חג המולד',
+    ];
+    // NYSE early closes (13:00 ET).
+    static $usEarly = ['2025-07-03', '2025-11-28', '2025-12-24', '2026-11-27', '2026-12-24'];
+
+    $notes = [];
+    $mk = function (string $flag, ?array $q, DateTimeImmutable $now, DateTimeZone $tz, callable $isDay, int $normalEnd, array $holidayNames, array $earlyDates) use ($ilTz, &$notes) {
+        $today = $now->format('Y-m-d');
+        $tomorrow = $now->modify('+1 day')->format('Y-m-d');
+        $td = $q['trade_date'] ?? null;
+        $end = isset($q['session_end']) ? (new DateTimeImmutable('@' . $q['session_end']))->setTimezone($tz) : null;
+        $endIl = $end ? $end->setTimezone($ilTz)->format('H:i') : null;
+        $earlyEnd = $end && (int) $end->format('Hi') < $normalEnd;
+
+        if (isset($holidayNames[$today]) || ($isDay($now) && $td && $td > $today)) {
+            $nm = $holidayNames[$today] ?? null;
+            $back = $td ? ' — מסחר חוזר ב-' . (new DateTimeImmutable($td))->setTimezone($ilTz)->format('d/m') : '';
+            $notes[] = "$flag היום סגור" . ($nm ? " — $nm" : $back);
+        } elseif (in_array($today, $earlyDates, true) || ($td === $today && $earlyEnd)) {
+            $notes[] = "$flag היום מסחר מקוצר" . ($endIl ? " — סגירה $endIl" : '');
+        }
+        if (isset($holidayNames[$tomorrow]) || ($isDay($now->modify('+1 day')) && $td && $td > $tomorrow)) {
+            $nm = $holidayNames[$tomorrow] ?? null;
+            $back = $td ? ' — מסחר חוזר ב-' . (new DateTimeImmutable($td))->setTimezone($ilTz)->format('d/m') : '';
+            $notes[] = "$flag מחר סגור" . ($nm ? " — $nm" : $back);
+        } elseif (in_array($tomorrow, $earlyDates, true) || ($td === $tomorrow && $earlyEnd)) {
+            $notes[] = "$flag מחר מסחר מקוצר" . ($endIl ? " — סגירה $endIl" : '');
+        }
+    };
+    $usDay = fn(DateTimeImmutable $d) => (int) $d->format('N') <= 5;
+    $ilDay = fn(DateTimeImmutable $d) => (int) $d->format('N') === 7 || (int) $d->format('N') <= 4;
+    $mk('🇺🇸', $usq, $usNow, $usTz, $usDay, 1600, $usHolidays, $usEarly);
+    $mk('🇮🇱', $ilq, $ilNow, $ilTz, $ilDay, 1700, [], []);
+    return $notes;
+}
+
 function current_user_id(): int
 {
     $id = env('WEB_TELEGRAM_ID');

@@ -99,11 +99,14 @@ function handle_page(string $page): never
     }
     if ($page === 'mkt_status') {
         header('Content-Type: application/json');
-        $us = prices()->quotes([['SPY', 'US']])[Prices::key('SPY', 'US')]['session'] ?? 'closed';
+        $qs = prices()->quotes([['SPY', 'US'], ['TA35', 'IL']]);
+        $usq = $qs[Prices::key('SPY', 'US')] ?? null;
+        $ilq = $qs[Prices::key('TA35', 'IL')] ?? null;
+        $us = $usq['session'] ?? 'closed';
         $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Jerusalem'));
         $dow = (int) $now->format('N'); $hm = (int) $now->format('Hi');
-        $il = ($dow <= 4 && $hm >= 1000 && $hm < 1730) ? 'regular' : 'closed';
-        echo json_encode(['us' => $us, 'il' => $il]);
+        $il = (($dow === 7 || $dow <= 4) && $hm >= 1000 && $hm < 1730) ? 'regular' : 'closed';
+        echo json_encode(['us' => $us, 'il' => $il, 'notes' => market_notes($usq, $ilq)]);
         exit;
     }
     $fresh = ($_GET['refresh'] ?? '') === '1';

@@ -230,6 +230,9 @@ final class Prices
         if (isset($tp['regular']['start'])) {
             $tz = new DateTimeZone($meta['exchangeTimezoneName'] ?? 'UTC');
             $extra['trade_date'] = (new DateTimeImmutable('@' . $tp['regular']['start']))->setTimezone($tz)->format('Y-m-d');
+            if (isset($tp['regular']['end'])) {
+                $extra['session_end'] = (int) $tp['regular']['end'];
+            }
         }
         if (!$extended) {
             return $this->quote($regular, $prev, $extra);

@@ -30,6 +30,7 @@
   <button type="button" class="link" id="theme-toggle" title="מצב כהה/בהיר">🌓</button>
   <form method="post" action="?a=logout"><?= csrf_field() ?><button class="link">יציאה</button></form>
 </header>
+<div id="news-strip" class="news-strip" hidden></div>
 <?php endif; ?>
 <main>
 <?php foreach ($flashes as [$type, $msg]): ?>
@@ -52,6 +53,11 @@ fetch('?p=mkt_status').then(r => r.json()).then(d => {
   const lbl = {regular: 'מסחר', pre: 'פרה-מרקט', post: 'אפטר-מרקט', closed: 'סגור'};
   document.getElementById('mkt-dots').innerHTML =
     `US ${cls[d.us] || ''} <small>${lbl[d.us] || d.us}</small> · IL ${cls[d.il] || ''} <small>${lbl[d.il] || d.il}</small>`;
+  const strip = document.getElementById('news-strip');
+  if (strip && Array.isArray(d.notes) && d.notes.length) {
+    strip.innerHTML = d.notes.map(n => `<span>${n}</span>`).join('<i>·</i>');
+    strip.hidden = false;
+  }
 }).catch(() => {});
 document.getElementById('theme-toggle')?.addEventListener('click', () => {
   const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
