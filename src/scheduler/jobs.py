@@ -35,7 +35,7 @@ from src.market.events import (
     EVENT_SPLIT,
     MarketEventsProvider,
 )
-from src.market.holidays import is_market_open, refresh_holiday_calendars
+from src.market.holidays import is_exchange_holiday, is_market_open, refresh_holiday_calendars
 from src.portfolio.corporate_actions import find_active_holdings
 from src.market.splits import split_already_applied
 from src.market.prices import PriceProvider
@@ -302,16 +302,33 @@ class BotScheduler:
             if current_hm == user.report_evening:
                 await self._send_user_reports(user, today, morning=False)
 
+    @staticmethod
+    def _market_closed_today(market: str, now: datetime) -> bool:
+        """Exchange closed all day today (exchange-local holiday or weekend)."""
+        if market == "US":
+            day = now.astimezone(pytz.timezone("US/Eastern")).date()
+            return day.weekday() >= 5 or is_exchange_holiday(day, "US")
+        day = now.astimezone(pytz.timezone(TIMEZONE)).date()
+        return day.weekday() >= 4 or is_exchange_holiday(day, "IL")
+
     async def _send_user_reports(self, user, today: str, *, morning: bool) -> None:
         t = self.i18n.load(user.language)
         portfolios = await self.repo.get_portfolios(user.telegram_id)
         kind = "morning" if morning else "evening"
+        now = datetime.now(pytz.timezone(TIMEZONE))
         for portfolio in portfolios:
             report_key = f"report:{kind}:{portfolio.id}:{today}"
             if await self.repo.was_alert_sent_today(user.telegram_id, report_key, today):
                 continue
             try:
                 holdings = await self.repo.get_holdings(portfolio.id)
+                markets = {h.market for h in holdings if h.quantity > 1e-9}
+                if len(markets) == 1 and self._market_closed_today(next(iter(markets)), now):
+                    logger.info(
+                        "Skipping %s report for user %s portfolio %s — %s market closed today",
+                        kind, user.telegram_id, portfolio.id, next(iter(markets)),
+                    )
+                    continue
                 trades = await self.repo.get_trades(portfolio.id)
                 cash_ils, cash_usd = await self.repo.get_cash_balances(portfolio.id)
                 summary = await self.calculator.compute_summary(
