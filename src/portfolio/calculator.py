@@ -103,9 +103,10 @@ class PortfolioCalculator:
         tz = pytz.timezone(TIMEZONE)
         today = today or datetime.now(tz).date().isoformat()
         symbol_trades = [t for t in trades if t.symbol.upper() == symbol]
-        daily_pnl = calc_symbol_daily_pnl(symbol_trades, quote, today=today) if quote else None
+        session_today = (quote.trade_date if quote else None) or today
+        daily_pnl = calc_symbol_daily_pnl(symbol_trades, quote, today=session_today) if quote else None
         daily_pct = (
-            calc_symbol_daily_pnl_pct(daily_pnl, symbol_trades, quote, today)
+            calc_symbol_daily_pnl_pct(daily_pnl, symbol_trades, quote, session_today)
             if daily_pnl is not None and quote
             else None
         )

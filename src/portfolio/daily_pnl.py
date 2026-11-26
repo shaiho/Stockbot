@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 
@@ -67,20 +67,6 @@ def _apply_trade(state: _PortfolioState, trade: Trade) -> None:
             state.cash_ils += proceeds
         else:
             state.cash_usd += proceeds
-
-
-def _portfolio_state_at(
-    trades: list[Trade],
-    opening_cash_ils: float,
-    opening_cash_usd: float,
-    before_date: str,
-) -> _PortfolioState:
-    state = _PortfolioState(opening_cash_ils, opening_cash_usd)
-    for trade in sorted(trades, key=lambda t: (t.timestamp, t.id)):
-        if _trade_date(trade) >= before_date:
-            break
-        _apply_trade(state, trade)
-    return state
 
 
 def _external_cash_flow_ils(trades: list[Trade], today: str, fx: float) -> float:
@@ -219,10 +205,37 @@ async def calc_portfolio_daily_pnl(
     tz = pytz.timezone(TIMEZONE)
     today = today or datetime.now(tz).date().isoformat()
 
-    start = _portfolio_state_at(trades, opening_cash_ils, opening_cash_usd, today)
+    quote_cache: dict[tuple[str, str], Quote | None] = {}
+
+    # Start-of-day boundary is the exchange session date, not local midnight:
+    # overnight (local date ahead of the session date) trades from the still-open
+    # session belong to "today", like the web Calc::dailyChange port.
+    cutoff = (datetime.now(tz).date() - timedelta(days=7)).isoformat()
+    session_dates: dict[tuple[str, str], str] = {}
+    for key in {
+        (t.symbol.upper(), t.market)
+        for t in trades
+        if t.asset_type != "cash" and _trade_date(t) >= cutoff
+    }:
+        if key not in quote_cache:
+            quote_cache[key] = await prices.get_quote(*key)
+        quote = quote_cache[key]
+        session_dates[key] = quote.trade_date if quote and quote.trade_date else today
+
+    start = _PortfolioState(opening_cash_ils, opening_cash_usd)
+    for trade in sorted(trades, key=lambda t: (t.timestamp, t.id)):
+        date = _trade_date(trade)
+        if trade.asset_type == "cash":
+            if date >= today:
+                continue
+        else:
+            session = session_dates.get((trade.symbol.upper(), trade.market), today)
+            if date >= session:
+                continue
+        _apply_trade(start, trade)
+
     start_value = start.cash_ils + start.cash_usd * fx
 
-    quote_cache: dict[tuple[str, str], Quote | None] = {}
     for (symbol, market, currency), qty in start.positions.items():
         if qty <= 1e-9:
             continue

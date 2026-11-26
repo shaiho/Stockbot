@@ -46,6 +46,7 @@ class Quote:
     regular_daily_change_pct: float | None = None
     volume: float | None = None
     avg_volume: float | None = None
+    trade_date: str | None = None
 
 
 class _RateLimiter:
@@ -147,8 +148,23 @@ class PriceProvider:
         if quote and market == "US":
             self._apply_us_extended_hours(quote)
         if quote:
+            quote.trade_date = self._session_trade_date(symbol, market)
             self._cache[key] = (time.time(), quote)
         return quote
+
+    def _session_trade_date(self, symbol: str, market: str) -> str | None:
+        """Trading-session date (exchange TZ) of the current/upcoming regular session."""
+        try:
+            ticker = yf.Ticker(self.yahoo_symbol(symbol, market))
+            ticker.history(period="1d", interval="1d")
+            meta = ticker.history_metadata or {}
+            start = ((meta.get("currentTradingPeriod") or {}).get("regular") or {}).get("start")
+            if not start:
+                return None
+            tz = pytz.timezone(meta.get("exchangeTimezoneName") or "UTC")
+            return datetime.fromtimestamp(start, tz).date().isoformat()
+        except Exception:
+            return None
 
     def _fetch_finnhub(self, symbol: str) -> Quote | None:
         try:
